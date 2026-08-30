@@ -21,12 +21,13 @@ def ir_a_capa(nivel, equipo=None):
 def toggle_barra():
     st.session_state.barra_oculta = not st.session_state.barra_oculta
 
-# Control estricto por CSS de nuestra barra lateral
+# Control estricto por CSS de nuestra barra lateral (CORRECCIÓN APLICADA AQUÍ)
 if st.session_state.barra_oculta:
-    st.markdown('<style>[data-testid="stSidebar"] { display: none !important; }</style>', unsafe_allow_html=True)
+    st.markdown('<style>[data-testid="stSidebar"] { display: none !important; transform: translateX(-100%) !important; }</style>', unsafe_allow_html=True)
     btn_text = "➡️ Mostrar menú"
 else:
-    st.markdown('<style>[data-testid="stSidebar"] { display: flex !important; }</style>', unsafe_allow_html=True)
+    # Se obliga a la barra a volver a la pantalla (transform: translateX(0)) y ser visible
+    st.markdown('<style>[data-testid="stSidebar"] { display: flex !important; visibility: visible !important; transform: translateX(0) !important; margin-left: 0px !important; }</style>', unsafe_allow_html=True)
     btn_text = "⬅️ Ocultar menú"
 
 # Botón flotante único e indestructible
