@@ -3,11 +3,11 @@ import io
 import pandas as pd
 import streamlit as st
 
-# 1. Configuración de la Interfaz (initial_sidebar_state="collapsed" asegura que no salga la barra lateral)
+# 1. Configuración de la Interfaz (Asegura que no salga la barra lateral)
 st.set_page_config(page_title="Trazabilidad SDDI", layout="wide", page_icon="🏛️", initial_sidebar_state="collapsed")
 
 # ==============================================================================
-# LÓGICA DE CAPAS (NAVEGACIÓN INTERNA)
+# LÓGICA DE CAPAS (NAVEGACIÓN INTERNA EN LA PESTAÑA 1)
 # ==============================================================================
 if 'capa_actual' not in st.session_state: st.session_state.capa_actual = 1
 if 'equipo_sel' not in st.session_state: st.session_state.equipo_sel = None
@@ -17,7 +17,7 @@ def ir_a_capa(nivel, equipo=None):
     if equipo is not None: st.session_state.equipo_sel = equipo
 
 # ==============================================================================
-# ESTILOS CSS AVANZADOS (LIMPIEZA DE MARCAS DE AGUA Y DISEÑO DE TARJETAS)
+# ESTILOS CSS AVANZADOS (PESTAÑAS TIPO EXCEL Y LIMPIEZA TOTAL)
 # ==============================================================================
 st.markdown("""
 <style>
@@ -25,7 +25,9 @@ st.markdown("""
 html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 .block-container { padding-top: 2rem !important; padding-bottom: 2rem !important; }
 
-/* 1. Exterminio absoluto de marcas de agua, header nativo y barra lateral */
+/* ================================================================= */
+/* 1. EXTERMINIO ABSOLUTO DE MARCAS DE AGUA Y CONTROLES NATIVOS      */
+/* ================================================================= */
 header[data-testid="stHeader"], [data-testid="stSidebar"], [data-testid="collapsedControl"] { display: none !important; visibility: hidden !important; width: 0 !important; height: 0 !important; }
 footer, #MainMenu, [data-testid="stDecoration"], [data-testid="stToolbar"] { display: none !important; visibility: hidden !important; }
 h1 a svg, h2 a svg, h3 a svg { display: none !important; } 
@@ -34,19 +36,60 @@ a[href*="github.com"], a[href*="streamlit.io"] { pointer-events: none !important
 .viewerBadge_container, div[class*="viewerBadge"] { display: none !important; opacity: 0 !important; }
 [data-testid="stStatusWidget"] { visibility: hidden !important; height: 0px !important; }
 
-/* 2. Estilización de las Pestañas (Tabs) para que parezcan Excel moderno */
-button[data-baseweb="tab"] {
-    font-size: 16px !important;
-    font-weight: 600 !important;
-    color: #5D6D7E !important;
-    padding-top: 15px !important;
-    padding-bottom: 15px !important;
+/* ================================================================= */
+/* 2. ESTILO DE PESTAÑAS TIPO EXCEL PROFESIONAL                      */
+/* ================================================================= */
+/* Contenedor base de las pestañas */
+div[data-baseweb="tab-list"] {
+    border-bottom: 2px solid #BDC3C7 !important; /* La línea base de las "hojas" */
+    gap: 4px !important;
+    padding-bottom: 0px !important;
 }
-button[data-baseweb="tab"][aria-selected="true"] {
-    color: #2980B9 !important;
+/* Oculta la línea animada nativa de Streamlit */
+div[data-baseweb="tab-highlight"] {
+    display: none !important; 
 }
 
-/* 3. Estilos de Tarjetas */
+/* Diseño de la Pestaña Inactiva */
+button[data-baseweb="tab"] {
+    background-color: #EAECEE !important; /* Fondo gris inactivo tipo Excel */
+    border: 1px solid #BDC3C7 !important;
+    border-bottom: none !important;
+    border-radius: 6px 6px 0 0 !important; /* Bordes redondeados solo arriba */
+    padding: 12px 24px !important;
+    color: #7F8C8D !important;
+    font-weight: 600 !important;
+    font-size: 15px !important;
+    margin-bottom: 0px !important;
+    transition: all 0.2s ease-in-out !important;
+}
+button[data-baseweb="tab"]:hover {
+    background-color: #D5DBDB !important;
+}
+
+/* Diseño de la Pestaña Activa (Seleccionada) */
+button[data-baseweb="tab"][aria-selected="true"] {
+    background-color: #FFFFFF !important; /* Fondo blanco activo */
+    color: #2C3E50 !important;
+    font-weight: 800 !important;
+    border: 1px solid #BDC3C7 !important;
+    border-top: 4px solid #2ECC71 !important; /* Detalle verde característico de Excel */
+    border-bottom: 3px solid #FFFFFF !important; /* Rompe la línea base inferior */
+    margin-bottom: -2px !important; /* Empuja la pestaña para tapar la línea base y "fundirse" con la hoja */
+    z-index: 10 !important;
+}
+button[data-baseweb="tab"][aria-selected="true"]:hover {
+    background-color: #FFFFFF !important; 
+}
+
+/* Espacio limpio después de las pestañas */
+div[data-baseweb="tab-panel"] {
+    padding-top: 25px !important; 
+}
+
+/* ================================================================= */
+/* 3. ESTILOS DE TARJETAS Y TABLAS                                   */
+/* ================================================================= */
 .tarjeta-metrica { background-color: #FFFFFF; padding: 8px 10px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.04); margin-bottom: 12px; text-align: center; height: 85px !important; display: flex; flex-direction: column; justify-content: center; align-items: center; }
 .tarjeta-titulo { color: #7F8C8D; font-size: 10px; margin: 0; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; min-height: 24px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px; line-height: 1.1; }
 .tarjeta-valor { color: #2C3E50; font-size: 26px; margin: 0 !important; font-weight: 700; line-height: 1; }
@@ -106,7 +149,7 @@ def cargar_datos():
     return df
 
 # ==============================================================================
-# CREACIÓN DE PESTAÑAS (TABS) NATIVAS
+# CREACIÓN DE PESTAÑAS (TABS) TIPO EXCEL
 # ==============================================================================
 tab_gestion, tab_produccion = st.tabs(["📁 Gestión de Expedientes", "📊 Avance de Producción"])
 
@@ -258,7 +301,7 @@ with tab_gestion:
 # CONTENIDO DE LA PESTAÑA 2: AVANCE DE PRODUCCIÓN
 # ==============================================================================
 with tab_produccion:
-    st.markdown("<br><h2 style='text-align: center; color: #2C3E50;'>Estamos trabajando para integrar esta información, por lo pronto ingrese a:</h2>", unsafe_allow_html=True)
+    st.markdown("<br><br><h2 style='text-align: center; color: #2C3E50;'>Estamos trabajando para integrar esta información, por lo pronto ingrese a:</h2>", unsafe_allow_html=True)
     
     html_enlace = """
     <div style='text-align: center; margin-top: 40px; margin-bottom: 40px;'>
@@ -276,7 +319,7 @@ with tab_produccion:
 # ==============================================================================
 st.markdown("""
 <div style='text-align: center; margin-top: 50px; padding-top: 20px; border-top: 1px solid #E0E6ED; color: #95A5A6; font-size: 13px; font-family: sans-serif;'>
-    <b>Diseñado y Desarrollado: SDDI / tyantas</b> &nbsp;|&nbsp; 
+    <b>Diseñado y Desarrollado: Equipo de Gestión SDDI / tyantas-myps</b> &nbsp;|&nbsp; 
     <span style="color: #95A5A6;">(Entorno Asegurado)</span>
 </div>
 """, unsafe_allow_html=True)
