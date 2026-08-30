@@ -7,7 +7,7 @@ import streamlit as st
 st.set_page_config(page_title="Trazabilidad SDDI", layout="wide", page_icon="🏛️", initial_sidebar_state="collapsed")
 
 # ==============================================================================
-# LÓGICA DE CAPAS
+# LÓGICA DE CAPAS (NAVEGACIÓN INTERNA EN LA PESTAÑA 1)
 # ==============================================================================
 if 'capa_actual' not in st.session_state: st.session_state.capa_actual = 1
 if 'equipo_sel' not in st.session_state: st.session_state.equipo_sel = None
@@ -17,42 +17,45 @@ def ir_a_capa(nivel, equipo=None):
     if equipo is not None: st.session_state.equipo_sel = equipo
 
 # ==============================================================================
-# ESTILOS CSS AVANZADOS (PESTAÑAS TIPO EXCEL Y BOTONES AZULES)
+# ESTILOS CSS AVANZADOS (PESTAÑAS TIPO EXCEL Y LIMPIEZA TOTAL)
 # ==============================================================================
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
-html, body, [class*="css"], .stApp { font-family: 'Inter', sans-serif !important; background-color: #F4F7F6 !important; }
+html, body, [class*="css"], .stApp { font-family: 'Inter', sans-serif !important; }
 .block-container { padding-top: 2rem !important; padding-bottom: 2rem !important; }
 
 /* ================================================================= */
-/* 1. RECUPERAR COLOR AZUL EN BOTONES (SIN CONFIG.TOML)              */
+/* 1. EXTERMINIO ABSOLUTO DE MARCAS DE AGUA Y NAVEGACIÓN NATIVA      */
 /* ================================================================= */
-button[kind="primary"] {
-    background-color: #2980B9 !important;
-    border-color: #2980B9 !important;
-    color: white !important;
-    font-weight: 700 !important;
-}
-button[kind="primary"]:hover {
-    background-color: #1A5276 !important;
-    border-color: #1A5276 !important;
-}
+header[data-testid="stHeader"], [data-testid="stSidebar"], [data-testid="collapsedControl"] { display: none !important; visibility: hidden !important; width: 0 !important; height: 0 !important; }
+footer, #MainMenu, [data-testid="stDecoration"], [data-testid="stToolbar"] { display: none !important; visibility: hidden !important; }
+h1 a svg, h2 a svg, h3 a svg { display: none !important; } 
+a[href*="github.com"], a[href*="streamlit.io"] { pointer-events: none !important; display: none !important; }
+
+/* Ocultar botones de la nube (Deploy, Manage app, etc) */
+.stAppDeployButton, [data-testid="stAppDeployButton"], div[class*="stDeployButton"] { display: none !important; opacity: 0 !important; pointer-events: none !important; }
+.viewerBadge_container, div[class*="viewerBadge"] { display: none !important; opacity: 0 !important; }
+[data-testid="stStatusWidget"] { visibility: hidden !important; height: 0px !important; }
 
 /* ================================================================= */
 /* 2. DISEÑO DE PESTAÑAS TIPO EXCEL (Selectores Extremos)            */
 /* ================================================================= */
-/* Contenedor de las pestañas */
-[data-testid="stTabs"] [data-baseweb="tab-list"] {
+
+/* Contenedor de las pestañas y línea inferior */
+.stTabs [role="tablist"] {
     gap: 6px !important;
     border-bottom: 2px solid #BDC3C7 !important;
 }
-/* Esconder la línea de selección por defecto de Streamlit */
-[data-testid="stTabs"] [data-baseweb="tab-highlight"] {
+
+/* Ocultar la barra animada inferior de Streamlit */
+.stTabs [data-baseweb="tab-highlight"] {
     display: none !important; 
+    background-color: transparent !important;
 }
-/* Pestaña Inactiva */
-[data-testid="stTabs"] [data-baseweb="tab"] {
+
+/* Diseño de la Pestaña Inactiva */
+.stTabs button[role="tab"] {
     background-color: #EAECEE !important;
     border-radius: 8px 8px 0px 0px !important;
     border: 1px solid #BDC3C7 !important;
@@ -61,41 +64,35 @@ button[kind="primary"]:hover {
     margin: 0 !important;
     transition: all 0.2s ease !important;
 }
-[data-testid="stTabs"] [data-baseweb="tab"] p {
+.stTabs button[role="tab"] p {
     font-size: 18px !important;
     font-weight: 600 !important;
     color: #7F8C8D !important;
 }
-[data-testid="stTabs"] [data-baseweb="tab"]:hover {
+.stTabs button[role="tab"]:hover {
     background-color: #D5DBDB !important;
 }
-/* Pestaña Activa (Seleccionada) */
-[data-testid="stTabs"] [data-baseweb="tab"][aria-selected="true"] {
+
+/* Diseño de la Pestaña Activa (Seleccionada) */
+.stTabs button[role="tab"][aria-selected="true"] {
     background-color: #E8F4F8 !important; /* Fondo azul tenue */
     border-top: 5px solid #2ECC71 !important; /* Borde verde superior */
-    border-bottom: 3px solid #E8F4F8 !important; /* Para tapar la línea base */
-    margin-bottom: -2px !important; /* Efecto de fusión con la hoja */
-    z-index: 99 !important;
+    border-bottom: 3px solid #E8F4F8 !important; /* Mismo color del fondo para tapar la línea base */
+    margin-bottom: -2px !important; /* Efecto de fusión con la hoja bajando la pestaña 2px */
+    z-index: 10 !important;
 }
-[data-testid="stTabs"] [data-baseweb="tab"][aria-selected="true"] p {
-    color: #2980B9 !important; /* Letra azul oscuro */
+.stTabs button[role="tab"][aria-selected="true"] p {
+    color: #2980B9 !important; /* Texto azul oscuro */
     font-weight: 900 !important;
 }
 
-/* ================================================================= */
-/* 3. EXTERMINIO DE MARCAS DE AGUA Y NAVEGACIÓN NATIVA               */
-/* ================================================================= */
-header[data-testid="stHeader"], [data-testid="stSidebar"], [data-testid="collapsedControl"] { display: none !important; visibility: hidden !important; width: 0 !important; height: 0 !important; }
-footer, #MainMenu, [data-testid="stDecoration"], [data-testid="stToolbar"] { display: none !important; visibility: hidden !important; }
-h1 a svg, h2 a svg, h3 a svg { display: none !important; } 
-a[href*="github.com"], a[href*="streamlit.io"] { pointer-events: none !important; display: none !important; }
-
-/* Ocultar botón Manage App y visor de Deploy */
-.stAppDeployButton, [data-testid="stAppDeployButton"], div[class*="stDeployButton"], [data-testid="manage-app-button"] { display: none !important; opacity: 0 !important; pointer-events: none !important; }
-.viewerBadge_container, div[class*="viewerBadge"] { display: none !important; opacity: 0 !important; }
+/* Espacio interno debajo de las pestañas */
+.stTabs [data-baseweb="tab-panel"] {
+    padding-top: 20px !important;
+}
 
 /* ================================================================= */
-/* 4. ESTILOS DE TARJETAS                                            */
+/* 3. ESTILOS DE TARJETAS Y CUADROS                                  */
 /* ================================================================= */
 .tarjeta-metrica { background-color: #FFFFFF; padding: 8px 10px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.04); margin-bottom: 12px; text-align: center; height: 85px !important; display: flex; flex-direction: column; justify-content: center; align-items: center; }
 .tarjeta-titulo { color: #7F8C8D; font-size: 10px; margin: 0; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; min-height: 24px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px; line-height: 1.1; }
@@ -149,6 +146,7 @@ def crear_tarjeta(titulo, valor, color_borde):
 
 @st.cache_data(ttl=300, show_spinner=False)
 def cargar_datos():
+    # ¡Asegúrate de colocar tu enlace real del CSV aquí!
     url_sheet = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT1sNYxj6znXHjwEGFZH58FXR1CUGUuw6Ro7dz2Y65byi6nkGP9s5f88FbUze-QT550MeucdeSpOIWm/pub?gid=0&single=true&output=csv" 
     df = pd.read_csv(url_sheet)
     if "Profesional" in df.columns:
@@ -327,6 +325,6 @@ with tab_produccion:
 st.markdown("""
 <div style='text-align: center; margin-top: 50px; padding-top: 20px; border-top: 1px solid #E0E6ED; color: #95A5A6; font-size: 13px; font-family: sans-serif;'>
     <b>Diseñado y Desarrollado: Equipo de Gestión SDDI / tyantas-myps</b> &nbsp;|&nbsp; 
-    <span style="color: #95A5A6;">(Entorno Asegurado)</span>
+    <span style="color: #95A5A6;">(Información de Trámite Transparente)</span>
 </div>
 """, unsafe_allow_html=True)
