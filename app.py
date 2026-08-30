@@ -31,17 +31,19 @@ def ir_a_capa(nivel, equipo=None):
 def toggle_barra():
     st.session_state.barra_oculta = not st.session_state.barra_oculta
 
+# La lógica de forzar márgenes ahora está encapsulada solo para pantallas de PC
 if st.session_state.barra_oculta:
-    st.markdown('<style>[data-testid="stSidebar"] { display: none !important; margin-left: -300px !important; }</style>', unsafe_allow_html=True)
+    st.markdown('<style>@media (min-width: 769px) { [data-testid="stSidebar"] { display: none !important; margin-left: -300px !important; } }</style>', unsafe_allow_html=True)
     btn_text = "➡️ Mostrar menú"
 else:
-    st.markdown('<style>[data-testid="stSidebar"] { display: flex !important; margin-left: 0px !important; }</style>', unsafe_allow_html=True)
+    st.markdown('<style>@media (min-width: 769px) { [data-testid="stSidebar"] { display: flex !important; margin-left: 0px !important; } }</style>', unsafe_allow_html=True)
     btn_text = "⬅️ Ocultar menú"
 
-# Botón flotante maestro anclado
-st.button(btn_text, on_click=toggle_barra, help="flotante")
+# Ancla invisible para el botón maestro
+st.markdown('<span class="floating-anchor"></span>', unsafe_allow_html=True)
+st.button(btn_text, on_click=toggle_barra)
 
-# 3. Estilos CSS Avanzados (SIN PARCHES FÍSICOS, 100% RESPONSIVO)
+# 3. Estilos CSS Avanzados (RESPONSIVO Y ADAPTABLE)
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
@@ -49,93 +51,89 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 .block-container { padding-top: 1.5rem !important; padding-bottom: 1rem !important; }
 
 /* ================================================================= */
-/* 1. EXTERMINIO DEL FOOTER Y HEADER NATIVO                          */
+/* 1. EXTERMINIO GLOBAL DE MARCAS DE AGUA                            */
 /* ================================================================= */
-footer, header, #MainMenu { visibility: hidden !important; display: none !important; }
-[data-testid="stHeader"] { display: none !important; }
+footer, #MainMenu { visibility: hidden !important; display: none !important; }
 [data-testid="stDecoration"] { display: none !important; }
-[data-testid="stToolbar"] { display: none !important; }
+[data-testid="stStatusWidget"] { visibility: hidden !important; height: 0px !important; }
 
-/* ================================================================= */
-/* 2. NEUTRALIZADOR DE ENLACES EXTERNOS Y MARCAS DE AGUA OCULTAS     */
-/* Se ocultan por código para no crear bloques que estorben en móvil */
-/* ================================================================= */
+/* Neutralizar clics en enlaces ocultos */
 a[href*="github.com"], a[href*="streamlit.io"] {
-    pointer-events: none !important;
-    cursor: default !important;
-    opacity: 0 !important;
-    display: none !important;
+    pointer-events: none !important; cursor: default !important; opacity: 0 !important; display: none !important;
 }
 div[class*="viewerBadge"], div[class*="stDeployButton"], [data-testid="stAppDeployButton"] {
-    display: none !important;
-    visibility: hidden !important;
-    z-index: -1 !important; 
+    display: none !important; visibility: hidden !important; z-index: -1 !important; 
 }
 
 /* ================================================================= */
-/* 3. DISEÑO DEL BOTÓN FLOTANTE ESTABLE                              */
+/* 2. DISEÑO PARA PC Y TABLETS GRANDES (Ancho > 768px)               */
 /* ================================================================= */
-div[data-testid="stTooltipHoverTarget"] {
-    position: fixed !important;
-    top: 52% !important; 
-    left: 20px !important; 
-    z-index: 999990 !important; 
-    width: auto !important;
-}
-div[data-testid="stTooltipHoverTarget"] button {
-    background-color: #2C3E50 !important;
-    color: #FFFFFF !important;
-    border: 2px solid #FFFFFF !important;
-    border-radius: 30px !important;
-    padding: 8px 20px !important;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.3) !important;
-    font-weight: 700 !important;
-    transition: all 0.3s ease !important;
-}
-div[data-testid="stTooltipHoverTarget"] button:hover {
-    background-color: #E74C3C !important;
-    transform: translateY(-3px) !important;
-    color: #FFFFFF !important;
-}
-div[role="tooltip"], div[data-baseweb="tooltip"] { display: none !important; opacity: 0 !important; }
+@media (min-width: 769px) {
+    header[data-testid="stHeader"] { display: none !important; visibility: hidden !important; }
+    
+    [data-testid="stSidebar"] {
+        min-width: 175px !important;
+        max-width: 175px !important;
+        background-color: #EAECEE !important;
+        border-right: 1px solid #D5DBDB !important;
+        transition: all 0.3s ease-in-out !important;
+    }
 
-/* ====== MODIFICACIONES DEL MENU LATERAL ====== */
-[data-testid="stSidebar"] {
-    min-width: 175px !important;
-    max-width: 175px !important;
-    background-color: #EAECEE !important;
-    border-right: 1px solid #D5DBDB !important;
-    transition: all 0.3s ease-in-out !important;
+    div.element-container:has(.floating-anchor) { display: none; }
+    div.element-container:has(.floating-anchor) + div.element-container {
+        position: fixed; top: 52%; left: 20px; z-index: 999990 !important; width: auto !important;
+    }
+    div.element-container:has(.floating-anchor) + div.element-container button {
+        background-color: #2C3E50 !important; color: #FFFFFF !important; border: 2px solid #FFFFFF !important;
+        border-radius: 30px !important; padding: 8px 20px !important; box-shadow: 0 4px 10px rgba(0,0,0,0.3) !important;
+        font-weight: 700 !important; transition: all 0.3s ease !important;
+    }
+    div.element-container:has(.floating-anchor) + div.element-container button:hover {
+        background-color: #E74C3C !important; transform: translateY(-3px) !important; color: #FFFFFF !important;
+    }
 }
+
+/* ================================================================= */
+/* 3. DISEÑO PARA CELULARES Y TABLETS PEQUEÑAS (Ancho <= 768px)      */
+/* ================================================================= */
+@media (max-width: 768px) {
+    /* Ocultar el botón flotante porque usaremos el menú nativo en celular */
+    div.element-container:has(.floating-anchor),
+    div.element-container:has(.floating-anchor) + div.element-container {
+        display: none !important;
+    }
+    
+    /* Restaurar el encabezado transparente solo para visualizar el Menú Hamburguesa */
+    header[data-testid="stHeader"] { 
+        display: block !important; visibility: visible !important; background: transparent !important; 
+    }
+    /* Pero mantenemos ocultas las opciones de la derecha (Deploy, Github) */
+    [data-testid="stToolbar"] { display: none !important; opacity: 0 !important; }
+
+    /* Dejamos que la barra lateral nativa recupere su funcionamiento de superposición (Overlay) */
+    [data-testid="stSidebar"] {
+        background-color: #EAECEE !important;
+        border-right: 1px solid #D5DBDB !important;
+    }
+}
+
+/* ====== ESTILOS COMPARTIDOS (Menú, Tarjetas y Cuadros) ====== */
 div[role="radiogroup"] > label > div:first-child { display: none !important; }
 div[role="radiogroup"] > label {
-    background-color: transparent;
-    border-radius: 6px;
-    padding: 10px 12px !important;
-    margin-bottom: 8px !important;
-    border-left: 4px solid transparent;
-    transition: all 0.2s ease;
+    background-color: transparent; border-radius: 6px; padding: 10px 12px !important;
+    margin-bottom: 8px !important; border-left: 4px solid transparent; transition: all 0.2s ease;
 }
-div[role="radiogroup"] > label p {
-    font-weight: 600 !important;
-    font-size: 13px !important; 
-    color: #5D6D7E !important;
-    margin: 0 !important;
-}
+div[role="radiogroup"] > label p { font-weight: 600 !important; font-size: 13px !important; color: #5D6D7E !important; margin: 0 !important; }
 div[role="radiogroup"] label[data-checked="true"], div[role="radiogroup"] label:has(input:checked) {
-    background-color: #FFFFFF !important; 
-    border-left: 4px solid #2ECC71 !important;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05) !important;
+    background-color: #FFFFFF !important; border-left: 4px solid #2ECC71 !important; box-shadow: 0 2px 4px rgba(0,0,0,0.05) !important;
 }
 div[role="radiogroup"] label[data-checked="true"] p, div[role="radiogroup"] label:has(input:checked) p {
-    color: #2C3E50 !important;
-    font-weight: 800 !important;
+    color: #2C3E50 !important; font-weight: 800 !important;
 }
 div[role="radiogroup"] label[data-checked="true"]::after, div[role="radiogroup"] label:has(input:checked)::after {
     content: ""; position: absolute; left: -4px; top: 50%; transform: translateY(-50%); height: 12px; width: 4px; background-color: #E74C3C;
 }
 
-/* ====== SIMETRÍA FORZADA Y CUADROS COMPACTOS ====== */
 .tarjeta-metrica { background-color: #FFFFFF; padding: 8px 10px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.04); margin-bottom: 12px; text-align: center; height: 85px !important; display: flex; flex-direction: column; justify-content: center; align-items: center; }
 .tarjeta-titulo { color: #7F8C8D; font-size: 10px; margin: 0; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; min-height: 24px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px; line-height: 1.1; }
 .tarjeta-valor { color: #2C3E50; font-size: 26px; margin: 0 !important; font-weight: 700; line-height: 1; }
@@ -367,7 +365,7 @@ elif menu_seleccion == "Avance de Producción":
 # ==============================================================================
 st.markdown("""
 <div style='text-align: center; margin-top: 50px; padding-top: 20px; border-top: 1px solid #E0E6ED; color: #95A5A6; font-size: 13px; font-family: sans-serif;'>
-    <b>Diseñado y Desarrollado: Equipo de Gestipon SDDI / tyantas-myps</b> &nbsp;|&nbsp; 
-    <span style="color: #95A5A6;">(Entorno Asegurado)</span>
+    <b>Diseñado y Desarrollado: Equipo de Gestión SDDI / tyantas-myps</b> &nbsp;|&nbsp; 
+    <span style="color: #95A5A6;">(Informació de Trámite Transparente)</span>
 </div>
 """, unsafe_allow_html=True)
