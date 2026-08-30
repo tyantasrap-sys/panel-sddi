@@ -3,7 +3,7 @@ import io
 import pandas as pd
 import streamlit as st
 
-# 1. Configuración de la Interfaz (Primera línea obligatoria, sin creación local de config.toml)
+# 1. Configuración de la Interfaz (Primera línea obligatoria)
 st.set_page_config(page_title="Trazabilidad SDDI", layout="wide", page_icon="🏛️", initial_sidebar_state="expanded")
 
 # ==============================================================================
@@ -22,16 +22,17 @@ def toggle_barra():
 
 if st.session_state.barra_oculta:
     estado_menu = '<style>[data-testid="stSidebar"] { display: none !important; transform: translateX(-100%) !important; }</style>'
-    btn_text = "➡️ Mostrar menú"
+    btn_text = "☰ Menú"
 else:
     estado_menu = '<style>[data-testid="stSidebar"] { display: flex !important; transform: translateX(0) !important; }</style>'
-    btn_text = "⬅️ Ocultar menú"
+    btn_text = "✖ Cerrar"
 
-# ¡ESTE DEBE SER EL PRIMER ELEMENTO DE LA PÁGINA PARA QUE EL CSS LO ANCLE CORRECTAMENTE!
+# ¡ESTO ES VITAL! El botón es estrictamente el PRIMER elemento que se dibuja en la pantalla.
+# Así aseguramos que el CSS de celular lo capture siempre sin importar la marca del teléfono.
 st.button(btn_text, on_click=toggle_barra)
 
 # ==============================================================================
-# ESTILOS CSS AVANZADOS (100% COMPATIBLE CON MÓVILES)
+# ESTILOS CSS AVANZADOS (100% COMPATIBLE CON MÓVILES - SIN ALUCINACIONES)
 # ==============================================================================
 st.markdown(estado_menu + """
 <style>
@@ -40,48 +41,50 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 .block-container { padding-top: 5rem !important; padding-bottom: 2rem !important; }
 
 /* ================================================================= */
-/* 1. DISEÑO DEL BOTÓN MAESTRO (COMPATIBLE CON CUALQUIER CELULAR)    */
-/* Capturamos el primer elemento (el botón) y lo hacemos flotar      */
+/* 1. EL BOTÓN MAESTRO (UBICADO ARRIBA A LA DERECHA COMO PEDISTE)    */
+/* Capturamos estrictamente el primer elemento renderedizado         */
 /* ================================================================= */
-div.block-container > div.element-container:nth-child(1) {
+section.main div.block-container > div:first-child {
     position: fixed !important;
     top: 15px !important;
-    left: 15px !important;
+    right: 15px !important; /* FIJADO A LA DERECHA PARA PC Y CELULAR */
+    left: auto !important;
     z-index: 9999999 !important; /* Siempre encima de todo */
     width: auto !important;
 }
-div.block-container > div.element-container:nth-child(1) button {
+
+section.main div.block-container > div:first-child button {
     background-color: #2C3E50 !important;
     color: #FFFFFF !important;
     border: 2px solid #FFFFFF !important;
     border-radius: 8px !important;
-    padding: 8px 16px !important;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.3) !important;
+    padding: 8px 20px !important;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3) !important;
     font-weight: 700 !important;
-    font-size: 14px !important;
+    font-size: 15px !important;
     transition: all 0.2s ease !important;
     margin: 0 !important;
 }
-div.block-container > div.element-container:nth-child(1) button:hover {
+
+section.main div.block-container > div:first-child button:hover {
     background-color: #E74C3C !important;
 }
 
 /* ================================================================= */
 /* 2. EXTERMINIO DE CONTROLES NATIVOS Y MARCAS DE LA NUBE            */
 /* ================================================================= */
-/* Eliminamos el Header superior completo y la flecha nativa */
+/* Desaparecemos para siempre el encabezado de Streamlit y su flecha */
 header[data-testid="stHeader"], [data-testid="collapsedControl"], [data-testid="stSidebarCollapseButton"] { 
     display: none !important; height: 0 !important; visibility: hidden !important; opacity: 0 !important;
 }
-/* Eliminamos el botón Deploy rojo y la marca de agua verde inferior */
-.stAppDeployButton, [data-testid="stAppDeployButton"], div[class*="stDeployButton"] { display: none !important; opacity: 0 !important; }
-.viewerBadge_container, div[class*="viewerBadge"] { display: none !important; opacity: 0 !important; }
+/* Bloqueo extremo a la nube: Elimina el botón Deploy y la marca inferior */
+.stAppDeployButton, [data-testid="stAppDeployButton"], div[class*="stDeployButton"] { display: none !important; opacity: 0 !important; pointer-events: none !important; }
+.viewerBadge_container, div[class*="viewerBadge"] { display: none !important; opacity: 0 !important; pointer-events: none !important;}
 footer, #MainMenu, [data-testid="stToolbar"], [data-testid="stDecoration"] { display: none !important; }
-/* Quitamos íconos de enlace (clips) al lado de los títulos */
-h1 a svg, h2 a svg, h3 a svg { display: none !important; }
+h1 a svg, h2 a svg, h3 a svg { display: none !important; } /* Oculta íconos de enlace en el título */
 
 /* ================================================================= */
-/* 3. BARRA LATERAL INTELIGENTE (PC VS MÓVIL)                        */
+/* 3. BARRA LATERAL INTELIGENTE (CORTINA EN MÓVILES)                 */
 /* ================================================================= */
 [data-testid="stSidebar"] {
     background-color: #EAECEE !important;
@@ -89,19 +92,19 @@ h1 a svg, h2 a svg, h3 a svg { display: none !important; }
     transition: transform 0.3s ease-in-out !important;
 }
 
-/* Diseño Computadora */
+/* En PC es fija y no estorba */
 @media (min-width: 769px) {
     [data-testid="stSidebar"] {
         min-width: 200px !important; max-width: 200px !important;
     }
 }
 
-/* Diseño Celular (Cortina Superpuesta) */
+/* En Celular es una cortina superpuesta por la izquierda */
 @media (max-width: 768px) {
     [data-testid="stSidebar"] {
         position: fixed !important; top: 0 !important; left: 0 !important; height: 100dvh !important;
         min-width: 240px !important; max-width: 240px !important;
-        z-index: 9999998 !important; /* Capa debajo del botón maestro */
+        z-index: 9999998 !important; /* Justo debajo de nuestro botón */
         box-shadow: 5px 0 20px rgba(0,0,0,0.3) !important;
     }
 }
@@ -187,7 +190,7 @@ def cargar_datos():
 # MENU LATERAL (SIDEBAR)
 # ==============================================================================
 with st.sidebar:
-    st.markdown("<div style='margin-top: 70px;'></div>", unsafe_allow_html=True) # Espacio para que el botón no lo tape
+    st.markdown("<div style='margin-top: 40px;'></div>", unsafe_allow_html=True) 
     menu_seleccion = st.radio("Navegación:", ["Gestión de Expedientes", "Avance de Producción"], label_visibility="collapsed")
 
 # ==============================================================================
