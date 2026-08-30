@@ -1,23 +1,43 @@
-import os
 import re
 import io
+import requests
 import pandas as pd
 import streamlit as st
 
-# 1. Configuración del Tema e Interfaz
-os.makedirs(".streamlit", exist_ok=True)
-with open(".streamlit/config.toml", "w", encoding="utf-8") as f:
-    f.write('''[theme]
-primaryColor = "#2980B9"
-backgroundColor = "#F4F7F6" 
-secondaryBackgroundColor = "#EAECEE"
-textColor = "#2C3E50"
-font = "sans serif"
-''')
+try:
+    from streamlit_lottie import st_lottie
+    LOTTIE_DISPONIBLE = True
+except ImportError:
+    LOTTIE_DISPONIBLE = False
 
+# 1. Configuración de la Interfaz (Debe ser el primer comando de Streamlit)
 st.set_page_config(page_title="Trazabilidad SDDI", layout="wide", page_icon="🏛️", initial_sidebar_state="expanded")
 
-# 3. Estilos CSS Avanzados (Limpieza total de marcas de agua y diseño optimizado)
+# ==============================================================================
+# LÓGICA DEL BOTÓN FLOTANTE Y CAPAS
+# ==============================================================================
+if 'capa_actual' not in st.session_state: st.session_state.capa_actual = 1
+if 'equipo_sel' not in st.session_state: st.session_state.equipo_sel = None
+if 'barra_oculta' not in st.session_state: st.session_state.barra_oculta = False
+
+def ir_a_capa(nivel, equipo=None):
+    st.session_state.capa_actual = nivel
+    if equipo is not None: st.session_state.equipo_sel = equipo
+
+def toggle_barra():
+    st.session_state.barra_oculta = not st.session_state.barra_oculta
+
+if st.session_state.barra_oculta:
+    st.markdown('<style>[data-testid="stSidebar"] { display: none !important; margin-left: -300px !important; }</style>', unsafe_allow_html=True)
+    btn_text = "➡️ Mostrar menú"
+else:
+    st.markdown('<style>[data-testid="stSidebar"] { display: flex !important; margin-left: 0px !important; }</style>', unsafe_allow_html=True)
+    btn_text = "⬅️ Ocultar menú"
+
+# Botón flotante anclado mediante etiqueta nativa (help="flotante")
+st.button(btn_text, on_click=toggle_barra, help="flotante")
+
+# 3. Estilos CSS Avanzados
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
@@ -25,26 +45,53 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 .block-container { padding-top: 1.5rem !important; padding-bottom: 1rem !important; }
 
 /* ================================================================= */
-/* ELIMINACIÓN TOTAL DE MARCAS DE AGUA Y MENÚS NATIVOS INFERIORES    */
+/* EXTERMINIO DE MARCAS DE AGUA Y MENÚS DE STREAMLIT CLOUD           */
 /* ================================================================= */
-#MainMenu { visibility: hidden !important; }
-footer { visibility: hidden !important; }
-header { visibility: hidden !important; }
-.stDeployButton { display: none !important; }
-[data-testid="stAppDeployButton"] { display: none !important; }
-.viewerBadge_container { display: none !important; }
+#MainMenu { visibility: hidden !important; display: none !important; }
+footer { visibility: hidden !important; display: none !important; }
+header { visibility: hidden !important; display: none !important; }
+.viewerBadge_container { display: none !important; opacity: 0 !important; }
+.stDeployButton { display: none !important; opacity: 0 !important; }
+[data-testid="stAppDeployButton"] { display: none !important; opacity: 0 !important; }
+[data-testid="stToolbar"] { display: none !important; opacity: 0 !important; }
 [data-testid="stStatusWidget"] { visibility: hidden !important; height: 0px !important; }
-[data-testid="stToolbar"] { display: none !important; }
+
+/* ================================================================= */
+/* DISEÑO DEL BOTÓN FLOTANTE                                         */
+/* ================================================================= */
+div[data-testid="stTooltipHoverTarget"] {
+    position: fixed !important;
+    top: 52% !important; 
+    left: 20px !important; 
+    z-index: 999999 !important;
+    width: auto !important;
+}
+div[data-testid="stTooltipHoverTarget"] button {
+    background-color: #2C3E50 !important;
+    color: #FFFFFF !important;
+    border: 2px solid #FFFFFF !important;
+    border-radius: 30px !important;
+    padding: 8px 20px !important;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3) !important;
+    font-weight: 700 !important;
+    transition: all 0.3s ease !important;
+}
+div[data-testid="stTooltipHoverTarget"] button:hover {
+    background-color: #E74C3C !important;
+    transform: translateY(-3px) !important;
+    color: #FFFFFF !important;
+}
+div[role="tooltip"], div[data-baseweb="tooltip"] { display: none !important; opacity: 0 !important; }
 
 /* ====== MODIFICACIONES DEL MENU LATERAL ====== */
 [data-testid="stSidebar"] {
-    min-width: 190px !important;
-    max-width: 190px !important;
+    min-width: 175px !important;
+    max-width: 175px !important;
     background-color: #EAECEE !important;
     border-right: 1px solid #D5DBDB !important;
+    transition: all 0.3s ease-in-out !important;
 }
 
-/* Pestañas del Menú */
 div[role="radiogroup"] > label > div:first-child { display: none !important; }
 div[role="radiogroup"] > label {
     background-color: transparent;
@@ -109,7 +156,6 @@ div[role="radiogroup"] label[data-checked="true"]::after, div[role="radiogroup"]
     line-height: 1;
 }
 
-/* Tarjetas de Equipos */
 .tarjeta-equipo { 
     background-color: #FFFFFF; 
     padding: 12px 10px; 
@@ -129,12 +175,13 @@ div[data-testid="stExpander"] div[data-testid="stButton"] button { min-height: 3
 </style>
 """, unsafe_allow_html=True)
 
-if 'capa_actual' not in st.session_state: st.session_state.capa_actual = 1
-if 'equipo_sel' not in st.session_state: st.session_state.equipo_sel = None
+def cargar_lottie(url):
+    try:
+        r = requests.get(url, timeout=5)
+        if r.status_code == 200: return r.json()
+    except: return None
 
-def ir_a_capa(nivel, equipo=None):
-    st.session_state.capa_actual = nivel
-    if equipo is not None: st.session_state.equipo_sel = equipo
+lottie_loading = cargar_lottie("https://assets5.lottiefiles.com/packages/lf20_us1436nr.json")
 
 def mostrar_encabezado(titulo, subtitulo, mostrar_volver=False):
     col_btn, col_header = st.columns([1, 11])
@@ -200,11 +247,20 @@ with st.sidebar:
 # MÓDULO 1: GESTIÓN DE EXPEDIENTES
 # ==============================================================================
 if menu_seleccion == "Gestión de Expedientes":
+    placeholder_loading = st.empty()
+    if 'datos_cargados' not in st.session_state:
+        with placeholder_loading.container():
+            st.markdown("<br><br>", unsafe_allow_html=True)
+            if LOTTIE_DISPONIBLE and lottie_loading: st_lottie(lottie_loading, height=180, key="loader")
+            st.markdown("<p style='text-align:center; color:#7F8C8D; font-weight:600;'>Conectando con el Sistema SDDI...</p>", unsafe_allow_html=True)
+
     try:
-        with st.spinner("Conectando con el Sistema SDDI..."):
-            df = cargar_datos()
+        df = cargar_datos()
+        st.session_state.datos_cargados = True
+        placeholder_loading.empty() 
     except Exception as e:
-        st.error(f"Error al conectar con la base de datos: {e}. Verifica tu enlace CSV.")
+        placeholder_loading.empty()
+        st.error(f"Error al conectar con la base de datos. Verifica el enlace CSV.")
         st.stop()
 
     if st.session_state.capa_actual == 1:
@@ -370,7 +426,7 @@ elif menu_seleccion == "Avance de Producción":
 # ==============================================================================
 st.markdown("""
 <div style='text-align: center; margin-top: 50px; padding-top: 20px; border-top: 1px solid #E0E6ED; color: #95A5A6; font-size: 13px; font-family: sans-serif;'>
-    <b>Diseñado y Desarrollado: SDDI / tyantas</b> &nbsp;|&nbsp; 
+    <b>Diseñado y Desarrollado: Equipo de Gestión SDDI/tjyr-myps</b> &nbsp;|&nbsp; 
     <a href="mailto:tyantas@sbn.gob.pe" target="_blank" style="color: #2980B9; text-decoration: none; font-weight: 600;">✉️ Contactar</a>
 </div>
 """, unsafe_allow_html=True)
