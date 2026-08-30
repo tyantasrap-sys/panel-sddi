@@ -27,6 +27,10 @@ html, body, [class*="css"] {
 .stTabs [data-baseweb="tab-list"] {
     justify-content: center;
 }
+/* Ocultar el menú superior derecho (Share, GitHub, etc.) sin romper la barra lateral */
+[data-testid="stToolbar"] {visibility: hidden !important;}
+/* Ocultar el footer o pie de página predeterminado */
+footer {visibility: hidden !important;}
 </style>
 """, unsafe_allow_html=True)
 
