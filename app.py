@@ -4,6 +4,7 @@ import io
 import requests
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components # <--- Nueva librería importada
 
 try:
     from streamlit_lottie import st_lottie
@@ -20,9 +21,35 @@ backgroundColor = "#F4F7F6"
 secondaryBackgroundColor = "#EAECEE"
 textColor = "#2C3E50"
 font = "sans serif"
+[client]
+toolbarMode = "viewer"
 ''')
 
+# Forzar ocultamiento de UI de desarrollo
+st.set_option("client.toolbarMode", "viewer")
+
 st.set_page_config(page_title="Trazabilidad SDDI", layout="wide", page_icon="🏛️", initial_sidebar_state="expanded")
+
+# ==============================================================================
+# SCRIPT INVISIBLE PARA ELIMINAR LOS LOGOS DE STREAMLIT CLOUD (HACK)
+# ==============================================================================
+components.html(
+    """
+    <script>
+    // Este script escapa del contenedor de la app y oculta los logos del servidor de Streamlit
+    const hideBadges = () => {
+        const badges = window.parent.document.querySelectorAll('[class*="viewerBadge_container"], [class*="styles_viewerBadge"], [class*="viewerBadge_link"]');
+        badges.forEach(badge => badge.style.display = 'none');
+    };
+    // Ejecutar inmediatamente y luego monitorear si el servidor los vuelve a inyectar
+    hideBadges();
+    setTimeout(hideBadges, 1000);
+    setTimeout(hideBadges, 3000);
+    </script>
+    """,
+    height=0,
+    width=0,
+)
 
 # ==============================================================================
 # LÓGICA DEL BOTÓN FLOTANTE Y CAPAS
@@ -48,14 +75,14 @@ else:
 st.markdown('<span class="floating-anchor"></span>', unsafe_allow_html=True)
 st.button(btn_text, on_click=toggle_barra)
 
-# 3. Estilos CSS Avanzados (Compacto, Responsivo y Bloqueo de Nube)
+# 3. Estilos CSS Avanzados
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
 html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 .block-container { padding-top: 1.5rem !important; padding-bottom: 1rem !important; }
 
-/* Ocultar elementos nativos de Streamlit para evitar fallos */
+/* Ocultar elementos nativos de Streamlit */
 header[data-testid="stHeader"], 
 [data-testid="collapsedControl"], 
 [data-testid="stSidebarCollapseButton"], 
@@ -66,17 +93,12 @@ footer {
 }
 div[data-testid="stStatusWidget"] { visibility: hidden !important; height: 0px !important; }
 
-/* ====== ELIMINADOR DEFINITIVO DE LOGOS DE STREAMLIT CLOUD ====== */
-.stDeployButton, 
-[data-testid="stDeployButton"],
-[class*="viewerBadge"], 
-[id*="viewerBadge"],
-[class*="styles_viewerBadge"],
-a[href*="streamlit.io/cloud"] {
+/* CSS Agresivo contra la nube de Streamlit */
+.viewerBadge_container__1QSob,
+.styles_viewerBadge__1yB5_,
+.viewerBadge_link__1S137,
+.viewerBadge_text__1JaDK {
     display: none !important;
-    visibility: hidden !important;
-    opacity: 0 !important;
-    pointer-events: none !important;
 }
 
 /* ====== DISEÑO DEL BOTÓN FLOTANTE ====== */
@@ -448,7 +470,7 @@ elif menu_seleccion == "Avance de Producción":
 # ==============================================================================
 st.markdown("""
 <div style='text-align: center; margin-top: 50px; padding-top: 20px; border-top: 1px solid #E0E6ED; color: #95A5A6; font-size: 13px; font-family: sans-serif;'>
-    <b>Diseñado y Desarrollado: SDDI / tyantas</b> &nbsp;|&nbsp; 
+    <b>Diseñado y Desarrollado: SDDI / tyantas-myps</b> &nbsp;|&nbsp; 
     <a href="mailto:tyantas@sbn.gob.pe" target="_blank" style="color: #2980B9; text-decoration: none; font-weight: 600;">✉️ Contactar</a>
 </div>
 """, unsafe_allow_html=True)
