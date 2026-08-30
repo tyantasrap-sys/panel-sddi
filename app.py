@@ -1,16 +1,20 @@
+import os
 import re
 import io
-import requests
 import pandas as pd
 import streamlit as st
 
-try:
-    from streamlit_lottie import st_lottie
-    LOTTIE_DISPONIBLE = True
-except ImportError:
-    LOTTIE_DISPONIBLE = False
+# 1. Configuración del Tema e Interfaz
+os.makedirs(".streamlit", exist_ok=True)
+with open(".streamlit/config.toml", "w", encoding="utf-8") as f:
+    f.write('''[theme]
+primaryColor = "#2980B9"
+backgroundColor = "#F4F7F6" 
+secondaryBackgroundColor = "#EAECEE"
+textColor = "#2C3E50"
+font = "sans serif"
+''')
 
-# 1. Configuración de la Interfaz
 st.set_page_config(page_title="Trazabilidad SDDI", layout="wide", page_icon="🏛️", initial_sidebar_state="expanded")
 
 # ==============================================================================
@@ -34,10 +38,10 @@ else:
     st.markdown('<style>[data-testid="stSidebar"] { display: flex !important; margin-left: 0px !important; }</style>', unsafe_allow_html=True)
     btn_text = "⬅️ Ocultar menú"
 
-# Botón flotante anclado
+# Botón flotante maestro anclado
 st.button(btn_text, on_click=toggle_barra, help="flotante")
 
-# 3. Estilos CSS Avanzados (INCLUYE EL BLOQUEO DE ENLACES EXTERNOS)
+# 3. Estilos CSS Avanzados (SUPER PARCHE INYECTADO)
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
@@ -45,36 +49,43 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 .block-container { padding-top: 1.5rem !important; padding-bottom: 1rem !important; }
 
 /* ================================================================= */
-/* HACK 1: NEUTRALIZADOR DE ENLACES A GITHUB Y STREAMLIT             */
-/* Impide que cualquier clic abra tu repositorio o la nube           */
+/* 1. EXTERMINIO DEL FOOTER Y HEADER NATIVO                          */
 /* ================================================================= */
-a[href*="github.com"], a[href*="streamlit.io"], a[href*="share.streamlit.io"] {
-    pointer-events: none !important;
-    cursor: default !important;
-    opacity: 0 !important;
-}
+footer, header, #MainMenu { visibility: hidden !important; display: none !important; }
+[data-testid="stHeader"] { display: none !important; }
+[data-testid="stDecoration"] { display: none !important; }
+[data-testid="stToolbar"] { display: none !important; }
 
 /* ================================================================= */
-/* HACK 2: EL "PARCHE INVISIBLE" PARA LA ESQUINA INFERIOR DERECHA    */
-/* Crea un bloque sólido del color del fondo para tapar los íconos   */
+/* 2. SUPER-PARCHE DE Z-INDEX MÁXIMO (LÍMITE MATEMÁTICO 2147483647)  */
+/* Esto garantiza que tape TODO aviso emergente de Streamlit Cloud   */
 /* ================================================================= */
-.parche-seguridad {
+.super-parche-inferior {
     position: fixed !important;
     bottom: 0px !important;
     right: 0px !important;
-    width: 150px !important;
-    height: 80px !important;
-    background-color: #F4F7F6 !important; /* Exactamente el mismo color del fondo general */
-    z-index: 9999999 !important; /* Z-index máximo para quedar por encima de TODO */
-    pointer-events: all !important; /* Absorbe los clics para que no pasen al botón de atrás */
+    width: 280px !important; /* Más ancho para asegurar que tape toda el área */
+    height: 100px !important;
+    background-color: #F4F7F6 !important; /* Exactamente el mismo color del fondo principal */
+    z-index: 2147483647 !important; /* Número máximo en navegadores web */
+    pointer-events: all !important; /* Bloquea clics accidentales */
     cursor: default !important;
 }
 
-/* Ocultamiento tradicional por si acaso */
-#MainMenu, footer, header { visibility: hidden !important; display: none !important; }
-.stDeployButton, [data-testid="stAppDeployButton"], .viewerBadge_container { display: none !important; opacity: 0 !important; pointer-events: none !important; }
-[data-testid="stStatusWidget"] { visibility: hidden !important; height: 0px !important; }
-[data-testid="stToolbar"] { display: none !important; opacity: 0 !important; pointer-events: none !important; }
+/* ================================================================= */
+/* 3. NEUTRALIZADOR DE ENLACES EXTERNOS Y MARCAS DE AGUA OCULTAS     */
+/* ================================================================= */
+a[href*="github.com"], a[href*="streamlit.io"] {
+    pointer-events: none !important;
+    cursor: default !important;
+    opacity: 0 !important;
+    display: none !important;
+}
+div[class*="viewerBadge"], div[class*="stDeployButton"], [data-testid="stAppDeployButton"] {
+    display: none !important;
+    visibility: hidden !important;
+    z-index: -1 !important; /* Los forzamos al fondo por si acaso */
+}
 
 /* ================================================================= */
 /* DISEÑO DEL BOTÓN FLOTANTE ESTABLE                                 */
@@ -83,7 +94,7 @@ div[data-testid="stTooltipHoverTarget"] {
     position: fixed !important;
     top: 52% !important; 
     left: 20px !important; 
-    z-index: 999999 !important;
+    z-index: 999990 !important; /* Cifra alta, pero por debajo de nuestro Súper Parche */
     width: auto !important;
 }
 div[data-testid="stTooltipHoverTarget"] button {
@@ -140,60 +151,17 @@ div[role="radiogroup"] label[data-checked="true"]::after, div[role="radiogroup"]
 }
 
 /* ====== SIMETRÍA FORZADA Y CUADROS COMPACTOS ====== */
-.tarjeta-metrica { 
-    background-color: #FFFFFF; 
-    padding: 8px 10px; 
-    border-radius: 8px; 
-    box-shadow: 0 2px 6px rgba(0,0,0,0.04); 
-    margin-bottom: 12px; 
-    text-align: center; 
-    height: 85px !important; 
-    display: flex; 
-    flex-direction: column; 
-    justify-content: center; 
-    align-items: center; 
-}
-.tarjeta-titulo { 
-    color: #7F8C8D; 
-    font-size: 10px; 
-    margin: 0; 
-    font-weight: 700; 
-    text-transform: uppercase; 
-    letter-spacing: 0.5px; 
-    min-height: 24px; 
-    display: flex;
-    align-items: flex-end;
-    justify-content: center;
-    padding-bottom: 2px;
-    line-height: 1.1;
-}
-.tarjeta-valor { 
-    color: #2C3E50; 
-    font-size: 26px; 
-    margin: 0 !important; 
-    font-weight: 700; 
-    line-height: 1;
-}
-.tarjeta-equipo { 
-    background-color: #FFFFFF; 
-    padding: 12px 10px; 
-    border-radius: 10px; 
-    border-top: 4px solid #2980B9; 
-    box-shadow: 0 3px 8px rgba(0,0,0,0.04); 
-    text-align: center; 
-    margin-bottom: 10px; 
-    height: 120px !important; 
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-}
+.tarjeta-metrica { background-color: #FFFFFF; padding: 8px 10px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.04); margin-bottom: 12px; text-align: center; height: 85px !important; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+.tarjeta-titulo { color: #7F8C8D; font-size: 10px; margin: 0; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; min-height: 24px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px; line-height: 1.1; }
+.tarjeta-valor { color: #2C3E50; font-size: 26px; margin: 0 !important; font-weight: 700; line-height: 1; }
+.tarjeta-equipo { background-color: #FFFFFF; padding: 12px 10px; border-radius: 10px; border-top: 4px solid #2980B9; box-shadow: 0 3px 8px rgba(0,0,0,0.04); text-align: center; margin-bottom: 10px; height: 120px !important; display: flex; flex-direction: column; justify-content: center; }
 div[data-testid="stExpander"] summary p { font-size: 14px !important; font-weight: 400 !important; color: #2C3E50 !important; }
 div[data-testid="stExpander"] div[data-testid="stButton"] button { min-height: 35px !important; padding: 2px 5px !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# Inyectamos el parche físico para tapar la esquina inferior derecha
-st.markdown('<div class="parche-seguridad"></div>', unsafe_allow_html=True)
+# Inyectamos el Súper Parche Protector
+st.markdown('<div class="super-parche-inferior"></div>', unsafe_allow_html=True)
 
 def mostrar_encabezado(titulo, subtitulo, mostrar_volver=False):
     col_btn, col_header = st.columns([1, 11])
@@ -238,7 +206,6 @@ def crear_tarjeta(titulo, valor, color_borde):
 
 @st.cache_data(ttl=300, show_spinner=False)
 def cargar_datos():
-    # ¡Asegúrate de colocar tu enlace real aquí!
     url_sheet = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT1sNYxj6znXHjwEGFZH58FXR1CUGUuw6Ro7dz2Y65byi6nkGP9s5f88FbUze-QT550MeucdeSpOIWm/pub?gid=0&single=true&output=csv" 
     df = pd.read_csv(url_sheet)
     if "Profesional" in df.columns:
@@ -351,7 +318,6 @@ if menu_seleccion == "Gestión de Expedientes":
                 
                 if f_actual != "Oculto":
                     st.markdown("<hr style='margin: 15px 0; border-top: 1px dashed #E0E6ED;'>", unsafe_allow_html=True)
-                    
                     st.info("💡 **Aviso:** Para que el botón automatice la búsqueda necesitas la extensión del bot en tu navegador. Si no la tienes, copia el número y pégalo manualmente en el portal.", icon="⚙️")
                     
                     df_m = df_p.copy()
@@ -364,7 +330,6 @@ if menu_seleccion == "Gestión de Expedientes":
                     
                     if len(df_m) > 0:
                         if "Trazabilidad" in df_m.columns: df_m = df_m.sort_values(by="Trazabilidad", ascending=False)
-                        
                         df_m["URL_Tramite"] = "https://tramitetransparente.sbn.gob.pe/#auto=" + df_m["expediente"].astype(str)
                         cols_mostrar = ["expediente", "Tipo Doc", "Trazabilidad", "URL_Tramite"]
                         existentes = [c for c in cols_mostrar if c in df_m.columns]
@@ -421,6 +386,6 @@ elif menu_seleccion == "Avance de Producción":
 st.markdown("""
 <div style='text-align: center; margin-top: 50px; padding-top: 20px; border-top: 1px solid #E0E6ED; color: #95A5A6; font-size: 13px; font-family: sans-serif;'>
     <b>Diseñado y Desarrollado: Equipo de Gestión SDDI / tyantas-myps</b> &nbsp;|&nbsp; 
-    <span style="color: #95A5A6;">(Sin enlaces externos por seguridad)</span>
+    <span style="color: #95A5A6;">(Entorno Asegurado)</span>
 </div>
 """, unsafe_allow_html=True)
