@@ -1,16 +1,8 @@
 import os
 import re
 import io
-import requests
 import pandas as pd
 import streamlit as st
-import streamlit.components.v1 as components # <--- Nueva librería importada
-
-try:
-    from streamlit_lottie import st_lottie
-    LOTTIE_DISPONIBLE = True
-except ImportError:
-    LOTTIE_DISPONIBLE = False
 
 # 1. Configuración del Tema e Interfaz
 os.makedirs(".streamlit", exist_ok=True)
@@ -21,115 +13,33 @@ backgroundColor = "#F4F7F6"
 secondaryBackgroundColor = "#EAECEE"
 textColor = "#2C3E50"
 font = "sans serif"
-[client]
-toolbarMode = "viewer"
 ''')
-
-# Forzar ocultamiento de UI de desarrollo
-st.set_option("client.toolbarMode", "viewer")
 
 st.set_page_config(page_title="Trazabilidad SDDI", layout="wide", page_icon="🏛️", initial_sidebar_state="expanded")
 
-# ==============================================================================
-# SCRIPT INVISIBLE PARA ELIMINAR LOS LOGOS DE STREAMLIT CLOUD (HACK)
-# ==============================================================================
-components.html(
-    """
-    <script>
-    // Este script escapa del contenedor de la app y oculta los logos del servidor de Streamlit
-    const hideBadges = () => {
-        const badges = window.parent.document.querySelectorAll('[class*="viewerBadge_container"], [class*="styles_viewerBadge"], [class*="viewerBadge_link"]');
-        badges.forEach(badge => badge.style.display = 'none');
-    };
-    // Ejecutar inmediatamente y luego monitorear si el servidor los vuelve a inyectar
-    hideBadges();
-    setTimeout(hideBadges, 1000);
-    setTimeout(hideBadges, 3000);
-    </script>
-    """,
-    height=0,
-    width=0,
-)
-
-# ==============================================================================
-# LÓGICA DEL BOTÓN FLOTANTE Y CAPAS
-# ==============================================================================
-if 'capa_actual' not in st.session_state: st.session_state.capa_actual = 1
-if 'equipo_sel' not in st.session_state: st.session_state.equipo_sel = None
-if 'barra_oculta' not in st.session_state: st.session_state.barra_oculta = False
-
-def ir_a_capa(nivel, equipo=None):
-    st.session_state.capa_actual = nivel
-    if equipo is not None: st.session_state.equipo_sel = equipo
-
-def toggle_barra():
-    st.session_state.barra_oculta = not st.session_state.barra_oculta
-
-if st.session_state.barra_oculta:
-    st.markdown('<style>[data-testid="stSidebar"] { display: none !important; }</style>', unsafe_allow_html=True)
-    btn_text = "➡️ Mostrar menú"
-else:
-    btn_text = "⬅️ Ocultar menú"
-
-# Botón flotante maestro con ancla
-st.markdown('<span class="floating-anchor"></span>', unsafe_allow_html=True)
-st.button(btn_text, on_click=toggle_barra)
-
-# 3. Estilos CSS Avanzados
+# 3. Estilos CSS Avanzados (Limpieza total de marcas de agua y diseño optimizado)
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
 html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 .block-container { padding-top: 1.5rem !important; padding-bottom: 1rem !important; }
 
-/* Ocultar elementos nativos de Streamlit */
-header[data-testid="stHeader"], 
-[data-testid="collapsedControl"], 
-[data-testid="stSidebarCollapseButton"], 
-[data-testid="stSidebarHeader"] button,
-[data-testid="stToolbar"], 
-footer { 
-    display: none !important; 
-}
-div[data-testid="stStatusWidget"] { visibility: hidden !important; height: 0px !important; }
-
-/* CSS Agresivo contra la nube de Streamlit */
-.viewerBadge_container__1QSob,
-.styles_viewerBadge__1yB5_,
-.viewerBadge_link__1S137,
-.viewerBadge_text__1JaDK {
-    display: none !important;
-}
-
-/* ====== DISEÑO DEL BOTÓN FLOTANTE ====== */
-div.element-container:has(.floating-anchor) { display: none; }
-div.element-container:has(.floating-anchor) + div.element-container {
-    position: fixed;
-    top: 52%; 
-    left: 20px; 
-    z-index: 999999;
-    width: auto !important;
-}
-div.element-container:has(.floating-anchor) + div.element-container button {
-    background-color: #2C3E50 !important;
-    color: #FFFFFF !important;
-    border: 2px solid #FFFFFF !important;
-    border-radius: 30px !important;
-    padding: 8px 20px !important;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.3) !important;
-    font-weight: 700 !important;
-    transition: all 0.3s ease !important;
-}
-div.element-container:has(.floating-anchor) + div.element-container button:hover {
-    background-color: #E74C3C !important;
-    transform: translateY(-3px) !important;
-    color: #FFFFFF !important;
-}
+/* ================================================================= */
+/* ELIMINACIÓN TOTAL DE MARCAS DE AGUA Y MENÚS NATIVOS INFERIORES    */
+/* ================================================================= */
+#MainMenu { visibility: hidden !important; }
+footer { visibility: hidden !important; }
+header { visibility: hidden !important; }
+.stDeployButton { display: none !important; }
+[data-testid="stAppDeployButton"] { display: none !important; }
+.viewerBadge_container { display: none !important; }
+[data-testid="stStatusWidget"] { visibility: hidden !important; height: 0px !important; }
+[data-testid="stToolbar"] { display: none !important; }
 
 /* ====== MODIFICACIONES DEL MENU LATERAL ====== */
 [data-testid="stSidebar"] {
-    min-width: 175px !important;
-    max-width: 175px !important;
+    min-width: 190px !important;
+    max-width: 190px !important;
     background-color: #EAECEE !important;
     border-right: 1px solid #D5DBDB !important;
 }
@@ -163,7 +73,7 @@ div[role="radiogroup"] label[data-checked="true"]::after, div[role="radiogroup"]
     content: ""; position: absolute; left: -4px; top: 50%; transform: translateY(-50%); height: 12px; width: 4px; background-color: #E74C3C;
 }
 
-/* ====== SIMETRÍA FORZADA Y CUADROS COMPACTOS (TARJETAS PRINCIPALES) ====== */
+/* ====== SIMETRÍA FORZADA Y CUADROS COMPACTOS ====== */
 .tarjeta-metrica { 
     background-color: #FFFFFF; 
     padding: 8px 10px; 
@@ -219,13 +129,12 @@ div[data-testid="stExpander"] div[data-testid="stButton"] button { min-height: 3
 </style>
 """, unsafe_allow_html=True)
 
-def cargar_lottie(url):
-    try:
-        r = requests.get(url, timeout=5)
-        if r.status_code == 200: return r.json()
-    except: return None
+if 'capa_actual' not in st.session_state: st.session_state.capa_actual = 1
+if 'equipo_sel' not in st.session_state: st.session_state.equipo_sel = None
 
-lottie_loading = cargar_lottie("https://assets5.lottiefiles.com/packages/lf20_us1436nr.json")
+def ir_a_capa(nivel, equipo=None):
+    st.session_state.capa_actual = nivel
+    if equipo is not None: st.session_state.equipo_sel = equipo
 
 def mostrar_encabezado(titulo, subtitulo, mostrar_volver=False):
     col_btn, col_header = st.columns([1, 11])
@@ -291,20 +200,11 @@ with st.sidebar:
 # MÓDULO 1: GESTIÓN DE EXPEDIENTES
 # ==============================================================================
 if menu_seleccion == "Gestión de Expedientes":
-    placeholder_loading = st.empty()
-    if 'datos_cargados' not in st.session_state:
-        with placeholder_loading.container():
-            st.markdown("<br><br>", unsafe_allow_html=True)
-            if LOTTIE_DISPONIBLE and lottie_loading: st_lottie(lottie_loading, height=180, key="loader")
-            st.markdown("<p style='text-align:center; color:#7F8C8D; font-weight:600;'>Conectando con el Sistema SDDI...</p>", unsafe_allow_html=True)
-
     try:
-        df = cargar_datos()
-        st.session_state.datos_cargados = True
-        placeholder_loading.empty() 
-    except:
-        placeholder_loading.empty()
-        st.error("Error al conectar con la base de datos. Verifica el enlace CSV.")
+        with st.spinner("Conectando con el Sistema SDDI..."):
+            df = cargar_datos()
+    except Exception as e:
+        st.error(f"Error al conectar con la base de datos: {e}. Verifica tu enlace CSV.")
         st.stop()
 
     if st.session_state.capa_actual == 1:
@@ -470,7 +370,7 @@ elif menu_seleccion == "Avance de Producción":
 # ==============================================================================
 st.markdown("""
 <div style='text-align: center; margin-top: 50px; padding-top: 20px; border-top: 1px solid #E0E6ED; color: #95A5A6; font-size: 13px; font-family: sans-serif;'>
-    <b>Diseñado y Desarrollado: SDDI / tyantas-myps</b> &nbsp;|&nbsp; 
+    <b>Diseñado y Desarrollado: SDDI / tyantas</b> &nbsp;|&nbsp; 
     <a href="mailto:tyantas@sbn.gob.pe" target="_blank" style="color: #2980B9; text-decoration: none; font-weight: 600;">✉️ Contactar</a>
 </div>
 """, unsafe_allow_html=True)
