@@ -426,7 +426,7 @@ elif menu_seleccion == "Avance de Producción":
 # ==============================================================================
 st.markdown("""
 <div style='text-align: center; margin-top: 50px; padding-top: 20px; border-top: 1px solid #E0E6ED; color: #95A5A6; font-size: 13px; font-family: sans-serif;'>
-    <b>Diseñado y Desarrollado: SDDI / tyantas</b> &nbsp;|&nbsp; 
+    <b>Diseñado y Desarrollado: Equipo de Gestión SDDI / tyantas-myps</b> &nbsp;|&nbsp; 
     <a href="mailto:tyantas@sbn.gob.pe" target="_blank" style="color: #2980B9; text-decoration: none; font-weight: 600;">✉️ Contactar</a>
 </div>
 """, unsafe_allow_html=True)
