@@ -10,7 +10,7 @@ try:
 except ImportError:
     LOTTIE_DISPONIBLE = False
 
-# 1. Configuración de la Interfaz (Debe ser el primer comando de Streamlit)
+# 1. Configuración del Tema e Interfaz
 st.set_page_config(page_title="Trazabilidad SDDI", layout="wide", page_icon="🏛️", initial_sidebar_state="expanded")
 
 # ==============================================================================
@@ -34,10 +34,10 @@ else:
     st.markdown('<style>[data-testid="stSidebar"] { display: flex !important; margin-left: 0px !important; }</style>', unsafe_allow_html=True)
     btn_text = "⬅️ Ocultar menú"
 
-# Botón flotante anclado mediante etiqueta nativa (help="flotante")
+# Botón flotante anclado
 st.button(btn_text, on_click=toggle_barra, help="flotante")
 
-# 3. Estilos CSS Avanzados
+# 3. Estilos CSS Avanzados (LA SOLUCIÓN DEFINITIVA A LAS MARCAS DE AGUA)
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
@@ -45,19 +45,32 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 .block-container { padding-top: 1.5rem !important; padding-bottom: 1rem !important; }
 
 /* ================================================================= */
-/* EXTERMINIO DE MARCAS DE AGUA Y MENÚS DE STREAMLIT CLOUD           */
+/* 1. EXTERMINIO DEL FOOTER NATIVO                                   */
 /* ================================================================= */
-#MainMenu { visibility: hidden !important; display: none !important; }
 footer { visibility: hidden !important; display: none !important; }
+[data-testid="stFooter"] { display: none !important; opacity: 0 !important; }
+
+/* ================================================================= */
+/* 2. EXTERMINIO DE BOTONES "DEPLOY" Y BURBUJAS DE STREAMLIT CLOUD   */
+/* Usamos selectores universales (*=) para cazar nombres aleatorios  */
+/* ================================================================= */
+.stAppDeployButton, [data-testid="stAppDeployButton"] { display: none !important; opacity: 0 !important; pointer-events: none !important; }
+.viewerBadge_container { display: none !important; opacity: 0 !important; pointer-events: none !important; }
+div[class*="viewerBadge"] { display: none !important; opacity: 0 !important; pointer-events: none !important; }
+div[class*="stDeployButton"] { display: none !important; opacity: 0 !important; pointer-events: none !important; }
+
+/* ================================================================= */
+/* 3. EXTERMINIO DEL HEADER Y MENÚ DE HAMBURGUESA                    */
+/* ================================================================= */
 header { visibility: hidden !important; display: none !important; }
-.viewerBadge_container { display: none !important; opacity: 0 !important; }
-.stDeployButton { display: none !important; opacity: 0 !important; }
-[data-testid="stAppDeployButton"] { display: none !important; opacity: 0 !important; }
-[data-testid="stToolbar"] { display: none !important; opacity: 0 !important; }
+[data-testid="stHeader"] { display: none !important; }
+#MainMenu { visibility: hidden !important; display: none !important; }
+[data-testid="stDecoration"] { display: none !important; }
+[data-testid="stToolbar"] { display: none !important; }
 [data-testid="stStatusWidget"] { visibility: hidden !important; height: 0px !important; }
 
 /* ================================================================= */
-/* DISEÑO DEL BOTÓN FLOTANTE                                         */
+/* DISEÑO DEL BOTÓN FLOTANTE ESTABLE                                 */
 /* ================================================================= */
 div[data-testid="stTooltipHoverTarget"] {
     position: fixed !important;
@@ -91,7 +104,6 @@ div[role="tooltip"], div[data-baseweb="tooltip"] { display: none !important; opa
     border-right: 1px solid #D5DBDB !important;
     transition: all 0.3s ease-in-out !important;
 }
-
 div[role="radiogroup"] > label > div:first-child { display: none !important; }
 div[role="radiogroup"] > label {
     background-color: transparent;
@@ -155,7 +167,6 @@ div[role="radiogroup"] label[data-checked="true"]::after, div[role="radiogroup"]
     font-weight: 700; 
     line-height: 1;
 }
-
 .tarjeta-equipo { 
     background-color: #FFFFFF; 
     padding: 12px 10px; 
@@ -169,19 +180,10 @@ div[role="radiogroup"] label[data-checked="true"]::after, div[role="radiogroup"]
     flex-direction: column;
     justify-content: center;
 }
-
 div[data-testid="stExpander"] summary p { font-size: 14px !important; font-weight: 400 !important; color: #2C3E50 !important; }
 div[data-testid="stExpander"] div[data-testid="stButton"] button { min-height: 35px !important; padding: 2px 5px !important; }
 </style>
 """, unsafe_allow_html=True)
-
-def cargar_lottie(url):
-    try:
-        r = requests.get(url, timeout=5)
-        if r.status_code == 200: return r.json()
-    except: return None
-
-lottie_loading = cargar_lottie("https://assets5.lottiefiles.com/packages/lf20_us1436nr.json")
 
 def mostrar_encabezado(titulo, subtitulo, mostrar_volver=False):
     col_btn, col_header = st.columns([1, 11])
@@ -226,6 +228,8 @@ def crear_tarjeta(titulo, valor, color_borde):
 
 @st.cache_data(ttl=300, show_spinner=False)
 def cargar_datos():
+    # IMPORTANTE: Reemplaza ESTE ENLACE por el URL oficial de tu CSV. 
+    # Si dejas esto vacío o inválido, la app se quedará cargando eternamente.
     url_sheet = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT1sNYxj6znXHjwEGFZH58FXR1CUGUuw6Ro7dz2Y65byi6nkGP9s5f88FbUze-QT550MeucdeSpOIWm/pub?gid=0&single=true&output=csv" 
     df = pd.read_csv(url_sheet)
     if "Profesional" in df.columns:
@@ -237,30 +241,17 @@ def cargar_datos():
 # ==============================================================================
 with st.sidebar:
     st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
-    menu_seleccion = st.radio(
-        "Navegación:",
-        ["Gestión de Expedientes", "Avance de Producción"],
-        label_visibility="collapsed"
-    )
+    menu_seleccion = st.radio("Navegación:", ["Gestión de Expedientes", "Avance de Producción"], label_visibility="collapsed")
 
 # ==============================================================================
 # MÓDULO 1: GESTIÓN DE EXPEDIENTES
 # ==============================================================================
 if menu_seleccion == "Gestión de Expedientes":
-    placeholder_loading = st.empty()
-    if 'datos_cargados' not in st.session_state:
-        with placeholder_loading.container():
-            st.markdown("<br><br>", unsafe_allow_html=True)
-            if LOTTIE_DISPONIBLE and lottie_loading: st_lottie(lottie_loading, height=180, key="loader")
-            st.markdown("<p style='text-align:center; color:#7F8C8D; font-weight:600;'>Conectando con el Sistema SDDI...</p>", unsafe_allow_html=True)
-
     try:
-        df = cargar_datos()
-        st.session_state.datos_cargados = True
-        placeholder_loading.empty() 
+        with st.spinner("Conectando con la base de datos..."):
+            df = cargar_datos()
     except Exception as e:
-        placeholder_loading.empty()
-        st.error(f"Error al conectar con la base de datos. Verifica el enlace CSV.")
+        st.error("Error al conectar con la base de datos. Asegúrate de colocar un enlace CSV válido en 'url_sheet'.")
         st.stop()
 
     if st.session_state.capa_actual == 1:
@@ -351,7 +342,6 @@ if menu_seleccion == "Gestión de Expedientes":
                 
                 if f_actual != "Oculto":
                     st.markdown("<hr style='margin: 15px 0; border-top: 1px dashed #E0E6ED;'>", unsafe_allow_html=True)
-                    
                     st.info("💡 **Aviso:** Para que el botón automatice la búsqueda necesitas la extensión del bot en tu navegador. Si no la tienes, copia el número y pégalo manualmente en el portal.", icon="⚙️")
                     
                     df_m = df_p.copy()
@@ -366,7 +356,6 @@ if menu_seleccion == "Gestión de Expedientes":
                         if "Trazabilidad" in df_m.columns: df_m = df_m.sort_values(by="Trazabilidad", ascending=False)
                         
                         df_m["URL_Tramite"] = "https://tramitetransparente.sbn.gob.pe/#auto=" + df_m["expediente"].astype(str)
-                        
                         cols_mostrar = ["expediente", "Tipo Doc", "Trazabilidad", "URL_Tramite"]
                         existentes = [c for c in cols_mostrar if c in df_m.columns]
                         
@@ -394,12 +383,7 @@ if menu_seleccion == "Gestión de Expedientes":
                                 df_m[existentes], 
                                 use_container_width=True, 
                                 hide_index=True,
-                                column_config={
-                                    "URL_Tramite": st.column_config.LinkColumn(
-                                        "🔗 Acción", 
-                                        display_text="Abrir Trámite"
-                                    )
-                                }
+                                column_config={"URL_Tramite": st.column_config.LinkColumn("🔗 Acción", display_text="Abrir Trámite")}
                             )
                     else:
                         st.info("No hay expedientes en esta categoría.")
