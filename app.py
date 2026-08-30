@@ -1,3 +1,4 @@
+import os
 import re
 import io
 import requests
@@ -10,7 +11,17 @@ try:
 except ImportError:
     LOTTIE_DISPONIBLE = False
 
-# 1. Configuración de la Interfaz (Debe ser el primer comando de Streamlit)
+# 1. Configuración del Tema e Interfaz
+os.makedirs(".streamlit", exist_ok=True)
+with open(".streamlit/config.toml", "w", encoding="utf-8") as f:
+    f.write('''[theme]
+primaryColor = "#2980B9"
+backgroundColor = "#F4F7F6" 
+secondaryBackgroundColor = "#EAECEE"
+textColor = "#2C3E50"
+font = "sans serif"
+''')
+
 st.set_page_config(page_title="Trazabilidad SDDI", layout="wide", page_icon="🏛️", initial_sidebar_state="expanded")
 
 # ==============================================================================
@@ -28,45 +39,43 @@ def toggle_barra():
     st.session_state.barra_oculta = not st.session_state.barra_oculta
 
 if st.session_state.barra_oculta:
-    st.markdown('<style>[data-testid="stSidebar"] { display: none !important; margin-left: -300px !important; }</style>', unsafe_allow_html=True)
+    st.markdown('<style>[data-testid="stSidebar"] { display: none !important; }</style>', unsafe_allow_html=True)
     btn_text = "➡️ Mostrar menú"
 else:
-    st.markdown('<style>[data-testid="stSidebar"] { display: flex !important; margin-left: 0px !important; }</style>', unsafe_allow_html=True)
     btn_text = "⬅️ Ocultar menú"
 
-# Botón flotante anclado mediante etiqueta nativa (help="flotante")
-st.button(btn_text, on_click=toggle_barra, help="flotante")
+# Botón flotante maestro con ancla
+st.markdown('<span class="floating-anchor"></span>', unsafe_allow_html=True)
+st.button(btn_text, on_click=toggle_barra)
 
-# 3. Estilos CSS Avanzados
+# 3. Estilos CSS Avanzados (Responsivos y Simetría)
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
 html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 .block-container { padding-top: 1.5rem !important; padding-bottom: 1rem !important; }
 
-/* ================================================================= */
-/* EXTERMINIO DE MARCAS DE AGUA Y MENÚS DE STREAMLIT CLOUD           */
-/* ================================================================= */
-#MainMenu { visibility: hidden !important; display: none !important; }
-footer { visibility: hidden !important; display: none !important; }
-header { visibility: hidden !important; display: none !important; }
-.viewerBadge_container { display: none !important; opacity: 0 !important; }
-.stDeployButton { display: none !important; opacity: 0 !important; }
-[data-testid="stAppDeployButton"] { display: none !important; opacity: 0 !important; }
-[data-testid="stToolbar"] { display: none !important; opacity: 0 !important; }
-[data-testid="stStatusWidget"] { visibility: hidden !important; height: 0px !important; }
+/* Ocultar elementos nativos de Streamlit para evitar fallos */
+header[data-testid="stHeader"], 
+[data-testid="collapsedControl"], 
+[data-testid="stSidebarCollapseButton"], 
+[data-testid="stSidebarHeader"] button,
+[data-testid="stToolbar"], 
+footer { 
+    display: none !important; 
+}
+div[data-testid="stStatusWidget"] { visibility: hidden !important; height: 0px !important; }
 
-/* ================================================================= */
-/* DISEÑO DEL BOTÓN FLOTANTE                                         */
-/* ================================================================= */
-div[data-testid="stTooltipHoverTarget"] {
-    position: fixed !important;
-    top: 52% !important; 
-    left: 20px !important; 
-    z-index: 999999 !important;
+/* ====== DISEÑO DEL BOTÓN FLOTANTE ====== */
+div.element-container:has(.floating-anchor) { display: none; }
+div.element-container:has(.floating-anchor) + div.element-container {
+    position: fixed;
+    top: 68%; /* <--- Movido exactamente al recuadro inferior de tu imagen */
+    left: 20px; 
+    z-index: 999999;
     width: auto !important;
 }
-div[data-testid="stTooltipHoverTarget"] button {
+div.element-container:has(.floating-anchor) + div.element-container button {
     background-color: #2C3E50 !important;
     color: #FFFFFF !important;
     border: 2px solid #FFFFFF !important;
@@ -76,12 +85,11 @@ div[data-testid="stTooltipHoverTarget"] button {
     font-weight: 700 !important;
     transition: all 0.3s ease !important;
 }
-div[data-testid="stTooltipHoverTarget"] button:hover {
+div.element-container:has(.floating-anchor) + div.element-container button:hover {
     background-color: #E74C3C !important;
     transform: translateY(-3px) !important;
     color: #FFFFFF !important;
 }
-div[role="tooltip"], div[data-baseweb="tooltip"] { display: none !important; opacity: 0 !important; }
 
 /* ====== MODIFICACIONES DEL MENU LATERAL ====== */
 [data-testid="stSidebar"] {
@@ -89,9 +97,9 @@ div[role="tooltip"], div[data-baseweb="tooltip"] { display: none !important; opa
     max-width: 175px !important;
     background-color: #EAECEE !important;
     border-right: 1px solid #D5DBDB !important;
-    transition: all 0.3s ease-in-out !important;
 }
 
+/* Pestañas del Menú */
 div[role="radiogroup"] > label > div:first-child { display: none !important; }
 div[role="radiogroup"] > label {
     background-color: transparent;
@@ -120,15 +128,15 @@ div[role="radiogroup"] label[data-checked="true"]::after, div[role="radiogroup"]
     content: ""; position: absolute; left: -4px; top: 50%; transform: translateY(-50%); height: 12px; width: 4px; background-color: #E74C3C;
 }
 
-/* ====== SIMETRÍA FORZADA Y CUADROS COMPACTOS ====== */
+/* ====== SIMETRÍA FORZADA EN TARJETAS MÉTRICAS ====== */
 .tarjeta-metrica { 
     background-color: #FFFFFF; 
-    padding: 8px 10px; 
+    padding: 12px 10px; 
     border-radius: 8px; 
     box-shadow: 0 2px 6px rgba(0,0,0,0.04); 
     margin-bottom: 12px; 
     text-align: center; 
-    height: 85px !important; 
+    height: 115px !important; /* Altura fija estricta para todos */
     display: flex; 
     flex-direction: column; 
     justify-content: center; 
@@ -141,21 +149,19 @@ div[role="radiogroup"] label[data-checked="true"]::after, div[role="radiogroup"]
     font-weight: 700; 
     text-transform: uppercase; 
     letter-spacing: 0.5px; 
-    min-height: 24px; 
+    height: 30px; /* Altura fija para que soporte 1 o 2 líneas sin empujar el número */
     display: flex;
-    align-items: flex-end;
+    align-items: center;
     justify-content: center;
-    padding-bottom: 2px;
-    line-height: 1.1;
 }
 .tarjeta-valor { 
     color: #2C3E50; 
     font-size: 26px; 
     margin: 0 !important; 
     font-weight: 700; 
-    line-height: 1;
 }
 
+/* Tarjetas de Equipos */
 .tarjeta-equipo { 
     background-color: #FFFFFF; 
     padding: 12px 10px; 
@@ -164,7 +170,7 @@ div[role="radiogroup"] label[data-checked="true"]::after, div[role="radiogroup"]
     box-shadow: 0 3px 8px rgba(0,0,0,0.04); 
     text-align: center; 
     margin-bottom: 10px; 
-    height: 120px !important; 
+    height: 120px !important; /* Altura estricta */
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -258,9 +264,9 @@ if menu_seleccion == "Gestión de Expedientes":
         df = cargar_datos()
         st.session_state.datos_cargados = True
         placeholder_loading.empty() 
-    except Exception as e:
+    except:
         placeholder_loading.empty()
-        st.error(f"Error al conectar con la base de datos. Verifica el enlace CSV.")
+        st.error("Error al conectar con la base de datos. Verifica el enlace CSV.")
         st.stop()
 
     if st.session_state.capa_actual == 1:
@@ -426,7 +432,7 @@ elif menu_seleccion == "Avance de Producción":
 # ==============================================================================
 st.markdown("""
 <div style='text-align: center; margin-top: 50px; padding-top: 20px; border-top: 1px solid #E0E6ED; color: #95A5A6; font-size: 13px; font-family: sans-serif;'>
-    <b>Diseñado y Desarrollado: Equipo de Gestión SDDI/tjyr-myps</b> &nbsp;|&nbsp; 
+    <b>Diseñado y Desarrollado: Equipo de Gestipon SDDI/ tyantas-myps</b> &nbsp;|&nbsp; 
     <a href="mailto:tyantas@sbn.gob.pe" target="_blank" style="color: #2980B9; text-decoration: none; font-weight: 600;">✉️ Contactar</a>
 </div>
 """, unsafe_allow_html=True)
