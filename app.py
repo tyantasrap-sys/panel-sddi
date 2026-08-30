@@ -41,7 +41,7 @@ else:
 # Botón flotante maestro anclado
 st.button(btn_text, on_click=toggle_barra, help="flotante")
 
-# 3. Estilos CSS Avanzados (SUPER PARCHE INYECTADO)
+# 3. Estilos CSS Avanzados (SIN PARCHES FÍSICOS, 100% RESPONSIVO)
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
@@ -57,23 +57,8 @@ footer, header, #MainMenu { visibility: hidden !important; display: none !import
 [data-testid="stToolbar"] { display: none !important; }
 
 /* ================================================================= */
-/* 2. SUPER-PARCHE DE Z-INDEX MÁXIMO (LÍMITE MATEMÁTICO 2147483647)  */
-/* Esto garantiza que tape TODO aviso emergente de Streamlit Cloud   */
-/* ================================================================= */
-.super-parche-inferior {
-    position: fixed !important;
-    bottom: 0px !important;
-    right: 0px !important;
-    width: 280px !important; /* Más ancho para asegurar que tape toda el área */
-    height: 100px !important;
-    background-color: #F4F7F6 !important; /* Exactamente el mismo color del fondo principal */
-    z-index: 2147483647 !important; /* Número máximo en navegadores web */
-    pointer-events: all !important; /* Bloquea clics accidentales */
-    cursor: default !important;
-}
-
-/* ================================================================= */
-/* 3. NEUTRALIZADOR DE ENLACES EXTERNOS Y MARCAS DE AGUA OCULTAS     */
+/* 2. NEUTRALIZADOR DE ENLACES EXTERNOS Y MARCAS DE AGUA OCULTAS     */
+/* Se ocultan por código para no crear bloques que estorben en móvil */
 /* ================================================================= */
 a[href*="github.com"], a[href*="streamlit.io"] {
     pointer-events: none !important;
@@ -84,17 +69,17 @@ a[href*="github.com"], a[href*="streamlit.io"] {
 div[class*="viewerBadge"], div[class*="stDeployButton"], [data-testid="stAppDeployButton"] {
     display: none !important;
     visibility: hidden !important;
-    z-index: -1 !important; /* Los forzamos al fondo por si acaso */
+    z-index: -1 !important; 
 }
 
 /* ================================================================= */
-/* DISEÑO DEL BOTÓN FLOTANTE ESTABLE                                 */
+/* 3. DISEÑO DEL BOTÓN FLOTANTE ESTABLE                              */
 /* ================================================================= */
 div[data-testid="stTooltipHoverTarget"] {
     position: fixed !important;
     top: 52% !important; 
     left: 20px !important; 
-    z-index: 999990 !important; /* Cifra alta, pero por debajo de nuestro Súper Parche */
+    z-index: 999990 !important; 
     width: auto !important;
 }
 div[data-testid="stTooltipHoverTarget"] button {
@@ -159,9 +144,6 @@ div[data-testid="stExpander"] summary p { font-size: 14px !important; font-weigh
 div[data-testid="stExpander"] div[data-testid="stButton"] button { min-height: 35px !important; padding: 2px 5px !important; }
 </style>
 """, unsafe_allow_html=True)
-
-# Inyectamos el Súper Parche Protector
-st.markdown('<div class="super-parche-inferior"></div>', unsafe_allow_html=True)
 
 def mostrar_encabezado(titulo, subtitulo, mostrar_volver=False):
     col_btn, col_header = st.columns([1, 11])
@@ -385,7 +367,7 @@ elif menu_seleccion == "Avance de Producción":
 # ==============================================================================
 st.markdown("""
 <div style='text-align: center; margin-top: 50px; padding-top: 20px; border-top: 1px solid #E0E6ED; color: #95A5A6; font-size: 13px; font-family: sans-serif;'>
-    <b>Diseñado y Desarrollado: Equipo de Gestión SDDI / tyantas-myps</b> &nbsp;|&nbsp; 
+    <b>Diseñado y Desarrollado: Equipo de Gestipon SDDI / tyantas-myps</b> &nbsp;|&nbsp; 
     <span style="color: #95A5A6;">(Entorno Asegurado)</span>
 </div>
 """, unsafe_allow_html=True)
