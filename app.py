@@ -47,33 +47,31 @@ st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
 html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
-.block-container { padding-top: 4.5rem !important; padding-bottom: 1rem !important; } /* Espacio superior para que el título no choque con el botón */
+.block-container { padding-top: 4rem !important; padding-bottom: 5rem !important; } /* Margen inferior para que el botón móvil no tape datos */
 
 /* ================================================================= */
-/* 1. EXTERMINIO DE CONTROLES NATIVOS Y MARCAS DE AGUA               */
+/* 1. EXTERMINIO TOTAL DE CONTROLES NATIVOS Y MARCAS DE AGUA         */
 /* ================================================================= */
-/* Desaparece la flecha nativa de Streamlit por completo */
 [data-testid="collapsedControl"], [data-testid="stSidebarCollapseButton"] { display: none !important; visibility: hidden !important; width: 0 !important; }
-
-/* Ocultar header, footer, íconos de anclaje (clip en títulos) y marcas de agua */
 footer, header, #MainMenu { visibility: hidden !important; display: none !important; }
 [data-testid="stHeader"] { display: none !important; }
 [data-testid="stDecoration"] { display: none !important; }
 [data-testid="stToolbar"] { display: none !important; }
-h1 a svg, h2 a svg, h3 a svg { display: none !important; } /* Oculta el ícono de enlace al lado de los títulos */
+h1 a svg, h2 a svg, h3 a svg { display: none !important; } 
 
-/* Bloqueo extremo de marcas de agua en la esquina inferior */
+/* Bloqueo extremo de marcas de agua */
 a[href^="https://streamlit.io"], a[href*="github.com"] { display: none !important; opacity: 0 !important; pointer-events: none !important; }
 div[class*="viewerBadge"], div[class*="stDeployButton"], [data-testid="stAppDeployButton"] { display: none !important; visibility: hidden !important; }
 
 /* ================================================================= */
-/* 2. BOTÓN FLOTANTE SUPERIOR IZQUIERDO (Siempre visible)            */
+/* 2. DISEÑO INTELIGENTE DEL BOTÓN FLOTANTE (PC vs CELULAR)          */
 /* ================================================================= */
+/* BASE: Diseño para Computadoras (Arriba a la izquierda) */
 div[data-testid="stTooltipHoverTarget"] {
     position: fixed !important;
     top: 15px !important; 
     left: 15px !important; 
-    z-index: 9999999 !important; /* Capa más alta de toda la app */
+    z-index: 9999999 !important; 
     width: auto !important;
 }
 div[data-testid="stTooltipHoverTarget"] button {
@@ -85,33 +83,48 @@ div[data-testid="stTooltipHoverTarget"] button {
     box-shadow: 0 4px 8px rgba(0,0,0,0.2) !important;
     font-weight: 700 !important;
     font-size: 14px !important;
-    transition: all 0.2s ease !important;
+    transition: all 0.3s ease !important;
 }
 div[data-testid="stTooltipHoverTarget"] button:hover {
-    background-color: #E74C3C !important;
-    color: #FFFFFF !important;
+    background-color: #E74C3C !important; color: #FFFFFF !important;
 }
-div[role="tooltip"], div[data-baseweb="tooltip"] { display: none !important; } /* Oculta etiqueta emergente negra */
+div[role="tooltip"], div[data-baseweb="tooltip"] { display: none !important; }
+
+/* REGLA MÓVIL: Si es pantalla de celular, mover el botón abajo al centro */
+@media (max-width: 768px) {
+    div[data-testid="stTooltipHoverTarget"] {
+        top: auto !important; 
+        bottom: 25px !important; /* Pegado al fondo */
+        left: 50% !important; /* Centrado horizontalmente */
+        transform: translateX(-50%) !important;
+    }
+    div[data-testid="stTooltipHoverTarget"] button {
+        padding: 12px 25px !important; /* Más grande para el dedo pulgar */
+        border-radius: 50px !important; /* Forma de píldora nativa de app */
+        box-shadow: 0 6px 15px rgba(0,0,0,0.4) !important;
+        font-size: 15px !important;
+    }
+}
 
 /* ================================================================= */
 /* 3. BARRA LATERAL (Inteligente para PC y Celular)                  */
 /* ================================================================= */
 [data-testid="stSidebar"] {
-    min-width: 200px !important; /* Ancho cómodo para leer las pestañas */
+    min-width: 200px !important; 
     max-width: 200px !important;
     background-color: #EAECEE !important;
     border-right: 1px solid #D5DBDB !important;
 }
 
-/* COMPORTAMIENTO MÓVIL: En pantallas pequeñas, la barra flota encima (Overlay) */
+/* COMPORTAMIENTO MÓVIL: Overlay (Cortina superpuesta) */
 @media (max-width: 768px) {
     [data-testid="stSidebar"] {
         position: fixed !important;
         top: 0 !important;
         left: 0 !important;
         height: 100vh !important;
-        z-index: 9999998 !important; /* Justo debajo del botón flotante */
-        box-shadow: 5px 0 15px rgba(0,0,0,0.1) !important;
+        z-index: 9999998 !important; /* Debajo del botón flotante inferior */
+        box-shadow: 5px 0 15px rgba(0,0,0,0.2) !important;
     }
 }
 
@@ -186,7 +199,6 @@ def crear_tarjeta(titulo, valor, color_borde):
 
 @st.cache_data(ttl=300, show_spinner=False)
 def cargar_datos():
-    # ¡Asegúrate de colocar tu enlace real aquí!
     url_sheet = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT1sNYxj6znXHjwEGFZH58FXR1CUGUuw6Ro7dz2Y65byi6nkGP9s5f88FbUze-QT550MeucdeSpOIWm/pub?gid=0&single=true&output=csv" 
     df = pd.read_csv(url_sheet)
     if "Profesional" in df.columns:
@@ -197,7 +209,7 @@ def cargar_datos():
 # MENU LATERAL (SIDEBAR)
 # ==============================================================================
 with st.sidebar:
-    st.markdown("<div style='margin-top: 60px;'></div>", unsafe_allow_html=True) # Espacio para que el botón no tape la primera opción
+    st.markdown("<div style='margin-top: 60px;'></div>", unsafe_allow_html=True) 
     menu_seleccion = st.radio("Navegación:", ["Gestión de Expedientes", "Avance de Producción"], label_visibility="collapsed")
 
 # ==============================================================================
@@ -299,7 +311,7 @@ if menu_seleccion == "Gestión de Expedientes":
                 
                 if f_actual != "Oculto":
                     st.markdown("<hr style='margin: 15px 0; border-top: 1px dashed #E0E6ED;'>", unsafe_allow_html=True)
-                    st.info("💡 **Aviso:** Para que el botón automatice la búsqueda necesitas la extensión del bot en tu navegador. Si no la tienes, copia el número y pégalo manualmente en el portal.", icon="⚙️")
+                    st.info("💡 **Aviso:** Para que el botón automatice la búsqueda necesitas la extensión del bot en tu navegador.", icon="⚙️")
                     
                     df_m = df_p.copy()
                     if f_actual == "SA": df_m = df_sddi[df_sddi["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False)]
