@@ -31,99 +31,97 @@ def ir_a_capa(nivel, equipo=None):
 def toggle_barra():
     st.session_state.barra_oculta = not st.session_state.barra_oculta
 
-# La lógica de forzar márgenes ahora está encapsulada solo para pantallas de PC
+# Control estricto de visualización del menú
 if st.session_state.barra_oculta:
-    st.markdown('<style>@media (min-width: 769px) { [data-testid="stSidebar"] { display: none !important; margin-left: -300px !important; } }</style>', unsafe_allow_html=True)
+    st.markdown('<style>[data-testid="stSidebar"] { display: none !important; transform: translateX(-100%) !important; }</style>', unsafe_allow_html=True)
     btn_text = "➡️ Mostrar menú"
 else:
-    st.markdown('<style>@media (min-width: 769px) { [data-testid="stSidebar"] { display: flex !important; margin-left: 0px !important; } }</style>', unsafe_allow_html=True)
+    st.markdown('<style>[data-testid="stSidebar"] { display: flex !important; transform: translateX(0) !important; }</style>', unsafe_allow_html=True)
     btn_text = "⬅️ Ocultar menú"
 
-# Ancla invisible para el botón maestro
-st.markdown('<span class="floating-anchor"></span>', unsafe_allow_html=True)
-st.button(btn_text, on_click=toggle_barra)
+# Botón flotante maestro anclado con ID único
+st.button(btn_text, on_click=toggle_barra, help="flotante")
 
-# 3. Estilos CSS Avanzados (RESPONSIVO Y ADAPTABLE)
+# 3. Estilos CSS Avanzados (Responsive & Mobile-First)
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
 html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
-.block-container { padding-top: 1.5rem !important; padding-bottom: 1rem !important; }
+.block-container { padding-top: 4.5rem !important; padding-bottom: 1rem !important; } /* Espacio superior para que el título no choque con el botón */
 
 /* ================================================================= */
-/* 1. EXTERMINIO GLOBAL DE MARCAS DE AGUA                            */
+/* 1. EXTERMINIO DE CONTROLES NATIVOS Y MARCAS DE AGUA               */
 /* ================================================================= */
-footer, #MainMenu { visibility: hidden !important; display: none !important; }
+/* Desaparece la flecha nativa de Streamlit por completo */
+[data-testid="collapsedControl"], [data-testid="stSidebarCollapseButton"] { display: none !important; visibility: hidden !important; width: 0 !important; }
+
+/* Ocultar header, footer, íconos de anclaje (clip en títulos) y marcas de agua */
+footer, header, #MainMenu { visibility: hidden !important; display: none !important; }
+[data-testid="stHeader"] { display: none !important; }
 [data-testid="stDecoration"] { display: none !important; }
-[data-testid="stStatusWidget"] { visibility: hidden !important; height: 0px !important; }
+[data-testid="stToolbar"] { display: none !important; }
+h1 a svg, h2 a svg, h3 a svg { display: none !important; } /* Oculta el ícono de enlace al lado de los títulos */
 
-/* Neutralizar clics en enlaces ocultos */
-a[href*="github.com"], a[href*="streamlit.io"] {
-    pointer-events: none !important; cursor: default !important; opacity: 0 !important; display: none !important;
+/* Bloqueo extremo de marcas de agua en la esquina inferior */
+a[href^="https://streamlit.io"], a[href*="github.com"] { display: none !important; opacity: 0 !important; pointer-events: none !important; }
+div[class*="viewerBadge"], div[class*="stDeployButton"], [data-testid="stAppDeployButton"] { display: none !important; visibility: hidden !important; }
+
+/* ================================================================= */
+/* 2. BOTÓN FLOTANTE SUPERIOR IZQUIERDO (Siempre visible)            */
+/* ================================================================= */
+div[data-testid="stTooltipHoverTarget"] {
+    position: fixed !important;
+    top: 15px !important; 
+    left: 15px !important; 
+    z-index: 9999999 !important; /* Capa más alta de toda la app */
+    width: auto !important;
 }
-div[class*="viewerBadge"], div[class*="stDeployButton"], [data-testid="stAppDeployButton"] {
-    display: none !important; visibility: hidden !important; z-index: -1 !important; 
+div[data-testid="stTooltipHoverTarget"] button {
+    background-color: #2C3E50 !important;
+    color: #FFFFFF !important;
+    border: 2px solid #FFFFFF !important;
+    border-radius: 8px !important;
+    padding: 8px 16px !important;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2) !important;
+    font-weight: 700 !important;
+    font-size: 14px !important;
+    transition: all 0.2s ease !important;
+}
+div[data-testid="stTooltipHoverTarget"] button:hover {
+    background-color: #E74C3C !important;
+    color: #FFFFFF !important;
+}
+div[role="tooltip"], div[data-baseweb="tooltip"] { display: none !important; } /* Oculta etiqueta emergente negra */
+
+/* ================================================================= */
+/* 3. BARRA LATERAL (Inteligente para PC y Celular)                  */
+/* ================================================================= */
+[data-testid="stSidebar"] {
+    min-width: 200px !important; /* Ancho cómodo para leer las pestañas */
+    max-width: 200px !important;
+    background-color: #EAECEE !important;
+    border-right: 1px solid #D5DBDB !important;
 }
 
-/* ================================================================= */
-/* 2. DISEÑO PARA PC Y TABLETS GRANDES (Ancho > 768px)               */
-/* ================================================================= */
-@media (min-width: 769px) {
-    header[data-testid="stHeader"] { display: none !important; visibility: hidden !important; }
-    
-    [data-testid="stSidebar"] {
-        min-width: 175px !important;
-        max-width: 175px !important;
-        background-color: #EAECEE !important;
-        border-right: 1px solid #D5DBDB !important;
-        transition: all 0.3s ease-in-out !important;
-    }
-
-    div.element-container:has(.floating-anchor) { display: none; }
-    div.element-container:has(.floating-anchor) + div.element-container {
-        position: fixed; top: 52%; left: 20px; z-index: 999990 !important; width: auto !important;
-    }
-    div.element-container:has(.floating-anchor) + div.element-container button {
-        background-color: #2C3E50 !important; color: #FFFFFF !important; border: 2px solid #FFFFFF !important;
-        border-radius: 30px !important; padding: 8px 20px !important; box-shadow: 0 4px 10px rgba(0,0,0,0.3) !important;
-        font-weight: 700 !important; transition: all 0.3s ease !important;
-    }
-    div.element-container:has(.floating-anchor) + div.element-container button:hover {
-        background-color: #E74C3C !important; transform: translateY(-3px) !important; color: #FFFFFF !important;
-    }
-}
-
-/* ================================================================= */
-/* 3. DISEÑO PARA CELULARES Y TABLETS PEQUEÑAS (Ancho <= 768px)      */
-/* ================================================================= */
+/* COMPORTAMIENTO MÓVIL: En pantallas pequeñas, la barra flota encima (Overlay) */
 @media (max-width: 768px) {
-    /* Ocultar el botón flotante porque usaremos el menú nativo en celular */
-    div.element-container:has(.floating-anchor),
-    div.element-container:has(.floating-anchor) + div.element-container {
-        display: none !important;
-    }
-    
-    /* Restaurar el encabezado transparente solo para visualizar el Menú Hamburguesa */
-    header[data-testid="stHeader"] { 
-        display: block !important; visibility: visible !important; background: transparent !important; 
-    }
-    /* Pero mantenemos ocultas las opciones de la derecha (Deploy, Github) */
-    [data-testid="stToolbar"] { display: none !important; opacity: 0 !important; }
-
-    /* Dejamos que la barra lateral nativa recupere su funcionamiento de superposición (Overlay) */
     [data-testid="stSidebar"] {
-        background-color: #EAECEE !important;
-        border-right: 1px solid #D5DBDB !important;
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        height: 100vh !important;
+        z-index: 9999998 !important; /* Justo debajo del botón flotante */
+        box-shadow: 5px 0 15px rgba(0,0,0,0.1) !important;
     }
 }
 
-/* ====== ESTILOS COMPARTIDOS (Menú, Tarjetas y Cuadros) ====== */
+/* Pestañas del Menú */
 div[role="radiogroup"] > label > div:first-child { display: none !important; }
 div[role="radiogroup"] > label {
-    background-color: transparent; border-radius: 6px; padding: 10px 12px !important;
+    background-color: transparent; border-radius: 6px; padding: 12px 15px !important;
     margin-bottom: 8px !important; border-left: 4px solid transparent; transition: all 0.2s ease;
 }
-div[role="radiogroup"] > label p { font-weight: 600 !important; font-size: 13px !important; color: #5D6D7E !important; margin: 0 !important; }
+div[role="radiogroup"] > label p { font-weight: 600 !important; font-size: 14px !important; color: #5D6D7E !important; margin: 0 !important; }
 div[role="radiogroup"] label[data-checked="true"], div[role="radiogroup"] label:has(input:checked) {
     background-color: #FFFFFF !important; border-left: 4px solid #2ECC71 !important; box-shadow: 0 2px 4px rgba(0,0,0,0.05) !important;
 }
@@ -131,9 +129,12 @@ div[role="radiogroup"] label[data-checked="true"] p, div[role="radiogroup"] labe
     color: #2C3E50 !important; font-weight: 800 !important;
 }
 div[role="radiogroup"] label[data-checked="true"]::after, div[role="radiogroup"] label:has(input:checked)::after {
-    content: ""; position: absolute; left: -4px; top: 50%; transform: translateY(-50%); height: 12px; width: 4px; background-color: #E74C3C;
+    content: ""; position: absolute; left: -4px; top: 50%; transform: translateY(-50%); height: 14px; width: 4px; background-color: #E74C3C;
 }
 
+/* ================================================================= */
+/* 4. SIMETRÍA FORZADA Y CUADROS COMPACTOS                           */
+/* ================================================================= */
 .tarjeta-metrica { background-color: #FFFFFF; padding: 8px 10px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.04); margin-bottom: 12px; text-align: center; height: 85px !important; display: flex; flex-direction: column; justify-content: center; align-items: center; }
 .tarjeta-titulo { color: #7F8C8D; font-size: 10px; margin: 0; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; min-height: 24px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px; line-height: 1.1; }
 .tarjeta-valor { color: #2C3E50; font-size: 26px; margin: 0 !important; font-weight: 700; line-height: 1; }
@@ -147,7 +148,6 @@ def mostrar_encabezado(titulo, subtitulo, mostrar_volver=False):
     col_btn, col_header = st.columns([1, 11])
     with col_btn:
         if mostrar_volver:
-            st.markdown("<div style='margin-bottom: 15px;'></div>", unsafe_allow_html=True)
             if st.button("⬅️ Volver", use_container_width=True):
                 ir_a_capa(1)
                 st.rerun()
@@ -155,8 +155,8 @@ def mostrar_encabezado(titulo, subtitulo, mostrar_volver=False):
         html_encabezado = f"""
         <div style='display: flex; flex-direction: row; align-items: center; justify-content: center; position: relative; width: 100%; margin-bottom: 25px; flex-wrap: wrap; gap: 20px;'>
             <div style='flex: 1 1 300px; text-align: center; order: 1;'>
-                <h1 style='margin:0; color:#1A252F; font-size: clamp(24px, 4vw, 38px); line-height: 1.2;'>{titulo}</h1>
-                <p style='margin:8px 0 0 0; color:#7F8C8D; font-size: 15px;'>{subtitulo}</p>
+                <h1 style='margin:0; color:#1A252F; font-size: clamp(24px, 4vw, 36px); line-height: 1.2;'>{titulo}</h1>
+                <p style='margin:8px 0 0 0; color:#7F8C8D; font-size: 14px;'>{subtitulo}</p>
             </div>
             <div style='order: 2; flex-shrink: 0;'>
                 <div style='width: 110px; min-height: 105px; background: linear-gradient(135deg, #656D74, #495057); border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.15); padding: 12px 14px; position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: center; margin: 0 auto;'>
@@ -186,6 +186,7 @@ def crear_tarjeta(titulo, valor, color_borde):
 
 @st.cache_data(ttl=300, show_spinner=False)
 def cargar_datos():
+    # ¡Asegúrate de colocar tu enlace real aquí!
     url_sheet = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT1sNYxj6znXHjwEGFZH58FXR1CUGUuw6Ro7dz2Y65byi6nkGP9s5f88FbUze-QT550MeucdeSpOIWm/pub?gid=0&single=true&output=csv" 
     df = pd.read_csv(url_sheet)
     if "Profesional" in df.columns:
@@ -196,7 +197,7 @@ def cargar_datos():
 # MENU LATERAL (SIDEBAR)
 # ==============================================================================
 with st.sidebar:
-    st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='margin-top: 60px;'></div>", unsafe_allow_html=True) # Espacio para que el botón no tape la primera opción
     menu_seleccion = st.radio("Navegación:", ["Gestión de Expedientes", "Avance de Producción"], label_visibility="collapsed")
 
 # ==============================================================================
@@ -365,7 +366,7 @@ elif menu_seleccion == "Avance de Producción":
 # ==============================================================================
 st.markdown("""
 <div style='text-align: center; margin-top: 50px; padding-top: 20px; border-top: 1px solid #E0E6ED; color: #95A5A6; font-size: 13px; font-family: sans-serif;'>
-    <b>Diseñado y Desarrollado: Equipo de Gestión SDDI / tyantas-myps</b> &nbsp;|&nbsp; 
-    <span style="color: #95A5A6;">(Informació de Trámite Transparente)</span>
+    <b>Diseñado y Desarrollado: SDDI / tyantas</b> &nbsp;|&nbsp; 
+    <span style="color: #95A5A6;">(Entorno Asegurado)</span>
 </div>
 """, unsafe_allow_html=True)
