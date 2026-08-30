@@ -66,11 +66,20 @@ footer {
 }
 div[data-testid="stStatusWidget"] { visibility: hidden !important; height: 0px !important; }
 
+/* ====== OCULTAR LOGOS DE LA NUBE (ESQUINA INFERIOR DERECHA) ====== */
+[data-testid="stViewerBadge"],
+[class*="viewerBadge"],
+[class*="styles_viewerBadge"] {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+}
+
 /* ====== DISEÑO DEL BOTÓN FLOTANTE ====== */
 div.element-container:has(.floating-anchor) { display: none; }
 div.element-container:has(.floating-anchor) + div.element-container {
     position: fixed;
-    top: 52%; /* <--- Ajuste milimétrico para quedar encima de "Calificación" sin taparlo */
+    top: 52%; 
     left: 20px; 
     z-index: 999999;
     width: auto !important;
@@ -136,7 +145,7 @@ div[role="radiogroup"] label[data-checked="true"]::after, div[role="radiogroup"]
     box-shadow: 0 2px 6px rgba(0,0,0,0.04); 
     margin-bottom: 12px; 
     text-align: center; 
-    height: 85px !important; /* <--- Reducido para abrazar el texto (Antes 115px) */
+    height: 85px !important; 
     display: flex; 
     flex-direction: column; 
     justify-content: center; 
@@ -149,7 +158,7 @@ div[role="radiogroup"] label[data-checked="true"]::after, div[role="radiogroup"]
     font-weight: 700; 
     text-transform: uppercase; 
     letter-spacing: 0.5px; 
-    min-height: 24px; /* Altura ajustada para 1 o 2 líneas sin crear vacío */
+    min-height: 24px; 
     display: flex;
     align-items: flex-end;
     justify-content: center;
@@ -158,7 +167,7 @@ div[role="radiogroup"] label[data-checked="true"]::after, div[role="radiogroup"]
 }
 .tarjeta-valor { 
     color: #2C3E50; 
-    font-size: 26px; /* Tamaño de letra original mantenido */
+    font-size: 26px; 
     margin: 0 !important; 
     font-weight: 700; 
     line-height: 1;
