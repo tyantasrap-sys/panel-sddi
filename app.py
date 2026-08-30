@@ -10,7 +10,7 @@ try:
 except ImportError:
     LOTTIE_DISPONIBLE = False
 
-# 1. Configuración del Tema e Interfaz
+# 1. Configuración de la Interfaz
 st.set_page_config(page_title="Trazabilidad SDDI", layout="wide", page_icon="🏛️", initial_sidebar_state="expanded")
 
 # ==============================================================================
@@ -37,7 +37,7 @@ else:
 # Botón flotante anclado
 st.button(btn_text, on_click=toggle_barra, help="flotante")
 
-# 3. Estilos CSS Avanzados (LA SOLUCIÓN DEFINITIVA A LAS MARCAS DE AGUA)
+# 3. Estilos CSS Avanzados (INCLUYE EL BLOQUEO DE ENLACES EXTERNOS)
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
@@ -45,29 +45,36 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 .block-container { padding-top: 1.5rem !important; padding-bottom: 1rem !important; }
 
 /* ================================================================= */
-/* 1. EXTERMINIO DEL FOOTER NATIVO                                   */
+/* HACK 1: NEUTRALIZADOR DE ENLACES A GITHUB Y STREAMLIT             */
+/* Impide que cualquier clic abra tu repositorio o la nube           */
 /* ================================================================= */
-footer { visibility: hidden !important; display: none !important; }
-[data-testid="stFooter"] { display: none !important; opacity: 0 !important; }
+a[href*="github.com"], a[href*="streamlit.io"], a[href*="share.streamlit.io"] {
+    pointer-events: none !important;
+    cursor: default !important;
+    opacity: 0 !important;
+}
 
 /* ================================================================= */
-/* 2. EXTERMINIO DE BOTONES "DEPLOY" Y BURBUJAS DE STREAMLIT CLOUD   */
-/* Usamos selectores universales (*=) para cazar nombres aleatorios  */
+/* HACK 2: EL "PARCHE INVISIBLE" PARA LA ESQUINA INFERIOR DERECHA    */
+/* Crea un bloque sólido del color del fondo para tapar los íconos   */
 /* ================================================================= */
-.stAppDeployButton, [data-testid="stAppDeployButton"] { display: none !important; opacity: 0 !important; pointer-events: none !important; }
-.viewerBadge_container { display: none !important; opacity: 0 !important; pointer-events: none !important; }
-div[class*="viewerBadge"] { display: none !important; opacity: 0 !important; pointer-events: none !important; }
-div[class*="stDeployButton"] { display: none !important; opacity: 0 !important; pointer-events: none !important; }
+.parche-seguridad {
+    position: fixed !important;
+    bottom: 0px !important;
+    right: 0px !important;
+    width: 150px !important;
+    height: 80px !important;
+    background-color: #F4F7F6 !important; /* Exactamente el mismo color del fondo general */
+    z-index: 9999999 !important; /* Z-index máximo para quedar por encima de TODO */
+    pointer-events: all !important; /* Absorbe los clics para que no pasen al botón de atrás */
+    cursor: default !important;
+}
 
-/* ================================================================= */
-/* 3. EXTERMINIO DEL HEADER Y MENÚ DE HAMBURGUESA                    */
-/* ================================================================= */
-header { visibility: hidden !important; display: none !important; }
-[data-testid="stHeader"] { display: none !important; }
-#MainMenu { visibility: hidden !important; display: none !important; }
-[data-testid="stDecoration"] { display: none !important; }
-[data-testid="stToolbar"] { display: none !important; }
+/* Ocultamiento tradicional por si acaso */
+#MainMenu, footer, header { visibility: hidden !important; display: none !important; }
+.stDeployButton, [data-testid="stAppDeployButton"], .viewerBadge_container { display: none !important; opacity: 0 !important; pointer-events: none !important; }
 [data-testid="stStatusWidget"] { visibility: hidden !important; height: 0px !important; }
+[data-testid="stToolbar"] { display: none !important; opacity: 0 !important; pointer-events: none !important; }
 
 /* ================================================================= */
 /* DISEÑO DEL BOTÓN FLOTANTE ESTABLE                                 */
@@ -185,6 +192,9 @@ div[data-testid="stExpander"] div[data-testid="stButton"] button { min-height: 3
 </style>
 """, unsafe_allow_html=True)
 
+# Inyectamos el parche físico para tapar la esquina inferior derecha
+st.markdown('<div class="parche-seguridad"></div>', unsafe_allow_html=True)
+
 def mostrar_encabezado(titulo, subtitulo, mostrar_volver=False):
     col_btn, col_header = st.columns([1, 11])
     with col_btn:
@@ -228,8 +238,7 @@ def crear_tarjeta(titulo, valor, color_borde):
 
 @st.cache_data(ttl=300, show_spinner=False)
 def cargar_datos():
-    # IMPORTANTE: Reemplaza ESTE ENLACE por el URL oficial de tu CSV. 
-    # Si dejas esto vacío o inválido, la app se quedará cargando eternamente.
+    # ¡Asegúrate de colocar tu enlace real aquí!
     url_sheet = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT1sNYxj6znXHjwEGFZH58FXR1CUGUuw6Ro7dz2Y65byi6nkGP9s5f88FbUze-QT550MeucdeSpOIWm/pub?gid=0&single=true&output=csv" 
     df = pd.read_csv(url_sheet)
     if "Profesional" in df.columns:
@@ -342,6 +351,7 @@ if menu_seleccion == "Gestión de Expedientes":
                 
                 if f_actual != "Oculto":
                     st.markdown("<hr style='margin: 15px 0; border-top: 1px dashed #E0E6ED;'>", unsafe_allow_html=True)
+                    
                     st.info("💡 **Aviso:** Para que el botón automatice la búsqueda necesitas la extensión del bot en tu navegador. Si no la tienes, copia el número y pégalo manualmente en el portal.", icon="⚙️")
                     
                     df_m = df_p.copy()
@@ -411,6 +421,6 @@ elif menu_seleccion == "Avance de Producción":
 st.markdown("""
 <div style='text-align: center; margin-top: 50px; padding-top: 20px; border-top: 1px solid #E0E6ED; color: #95A5A6; font-size: 13px; font-family: sans-serif;'>
     <b>Diseñado y Desarrollado: Equipo de Gestión SDDI / tyantas-myps</b> &nbsp;|&nbsp; 
-    <a href="mailto:tyantas@sbn.gob.pe" target="_blank" style="color: #2980B9; text-decoration: none; font-weight: 600;">✉️ Contactar</a>
+    <span style="color: #95A5A6;">(Sin enlaces externos por seguridad)</span>
 </div>
 """, unsafe_allow_html=True)
