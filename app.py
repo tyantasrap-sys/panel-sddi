@@ -48,7 +48,7 @@ else:
 st.markdown('<span class="floating-anchor"></span>', unsafe_allow_html=True)
 st.button(btn_text, on_click=toggle_barra)
 
-# 3. Estilos CSS Avanzados (Compacto y Responsivo)
+# 3. Estilos CSS Avanzados (Compacto, Responsivo y Bloqueo de Nube)
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
@@ -66,13 +66,17 @@ footer {
 }
 div[data-testid="stStatusWidget"] { visibility: hidden !important; height: 0px !important; }
 
-/* ====== OCULTAR LOGOS DE LA NUBE (ESQUINA INFERIOR DERECHA) ====== */
-[data-testid="stViewerBadge"],
-[class*="viewerBadge"],
-[class*="styles_viewerBadge"] {
+/* ====== ELIMINADOR DEFINITIVO DE LOGOS DE STREAMLIT CLOUD ====== */
+.stDeployButton, 
+[data-testid="stDeployButton"],
+[class*="viewerBadge"], 
+[id*="viewerBadge"],
+[class*="styles_viewerBadge"],
+a[href*="streamlit.io/cloud"] {
     display: none !important;
     visibility: hidden !important;
     opacity: 0 !important;
+    pointer-events: none !important;
 }
 
 /* ====== DISEÑO DEL BOTÓN FLOTANTE ====== */
