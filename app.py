@@ -7,7 +7,7 @@ import streamlit as st
 st.set_page_config(page_title="Trazabilidad SDDI", layout="wide", page_icon="🏛️", initial_sidebar_state="collapsed")
 
 # ==============================================================================
-# LÓGICA DE CAPAS (NAVEGACIÓN INTERNA EN LA PESTAÑA 1)
+# LÓGICA DE CAPAS
 # ==============================================================================
 if 'capa_actual' not in st.session_state: st.session_state.capa_actual = 1
 if 'equipo_sel' not in st.session_state: st.session_state.equipo_sel = None
@@ -17,92 +17,85 @@ def ir_a_capa(nivel, equipo=None):
     if equipo is not None: st.session_state.equipo_sel = equipo
 
 # ==============================================================================
-# ESTILOS CSS AVANZADOS (COLORES, PESTAÑAS Y LIMPIEZA)
+# ESTILOS CSS AVANZADOS (PESTAÑAS TIPO EXCEL Y BOTONES AZULES)
 # ==============================================================================
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
-
-/* ================================================================= */
-/* 0. INYECCIÓN DIRECTA DEL TEMA DE COLORES (Reemplaza al config.toml)*/
-/* ================================================================= */
-:root {
-    --primary-color: #2980B9;
-    --background-color: #F4F7F6;
-    --secondary-background-color: #EAECEE;
-    --text-color: #2C3E50;
-    --font: 'Inter', sans-serif;
-}
-
-html, body, [class*="css"], .stApp { 
-    font-family: var(--font) !important; 
-    background-color: var(--background-color) !important;
-    color: var(--text-color) !important;
-}
-
+html, body, [class*="css"], .stApp { font-family: 'Inter', sans-serif !important; background-color: #F4F7F6 !important; }
 .block-container { padding-top: 2rem !important; padding-bottom: 2rem !important; }
 
 /* ================================================================= */
-/* 1. EXTERMINIO ABSOLUTO DE MARCAS DE AGUA Y CONTROLES NATIVOS      */
+/* 1. RECUPERAR COLOR AZUL EN BOTONES (SIN CONFIG.TOML)              */
+/* ================================================================= */
+button[kind="primary"] {
+    background-color: #2980B9 !important;
+    border-color: #2980B9 !important;
+    color: white !important;
+    font-weight: 700 !important;
+}
+button[kind="primary"]:hover {
+    background-color: #1A5276 !important;
+    border-color: #1A5276 !important;
+}
+
+/* ================================================================= */
+/* 2. DISEÑO DE PESTAÑAS TIPO EXCEL (Selectores Extremos)            */
+/* ================================================================= */
+/* Contenedor de las pestañas */
+[data-testid="stTabs"] [data-baseweb="tab-list"] {
+    gap: 6px !important;
+    border-bottom: 2px solid #BDC3C7 !important;
+}
+/* Esconder la línea de selección por defecto de Streamlit */
+[data-testid="stTabs"] [data-baseweb="tab-highlight"] {
+    display: none !important; 
+}
+/* Pestaña Inactiva */
+[data-testid="stTabs"] [data-baseweb="tab"] {
+    background-color: #EAECEE !important;
+    border-radius: 8px 8px 0px 0px !important;
+    border: 1px solid #BDC3C7 !important;
+    border-bottom: none !important;
+    padding: 12px 24px !important;
+    margin: 0 !important;
+    transition: all 0.2s ease !important;
+}
+[data-testid="stTabs"] [data-baseweb="tab"] p {
+    font-size: 18px !important;
+    font-weight: 600 !important;
+    color: #7F8C8D !important;
+}
+[data-testid="stTabs"] [data-baseweb="tab"]:hover {
+    background-color: #D5DBDB !important;
+}
+/* Pestaña Activa (Seleccionada) */
+[data-testid="stTabs"] [data-baseweb="tab"][aria-selected="true"] {
+    background-color: #E8F4F8 !important; /* Fondo azul tenue */
+    border-top: 5px solid #2ECC71 !important; /* Borde verde superior */
+    border-bottom: 3px solid #E8F4F8 !important; /* Para tapar la línea base */
+    margin-bottom: -2px !important; /* Efecto de fusión con la hoja */
+    z-index: 99 !important;
+}
+[data-testid="stTabs"] [data-baseweb="tab"][aria-selected="true"] p {
+    color: #2980B9 !important; /* Letra azul oscuro */
+    font-weight: 900 !important;
+}
+
+/* ================================================================= */
+/* 3. EXTERMINIO DE MARCAS DE AGUA Y NAVEGACIÓN NATIVA               */
 /* ================================================================= */
 header[data-testid="stHeader"], [data-testid="stSidebar"], [data-testid="collapsedControl"] { display: none !important; visibility: hidden !important; width: 0 !important; height: 0 !important; }
 footer, #MainMenu, [data-testid="stDecoration"], [data-testid="stToolbar"] { display: none !important; visibility: hidden !important; }
 h1 a svg, h2 a svg, h3 a svg { display: none !important; } 
 a[href*="github.com"], a[href*="streamlit.io"] { pointer-events: none !important; display: none !important; }
-.stAppDeployButton, [data-testid="stAppDeployButton"], div[class*="stDeployButton"] { display: none !important; opacity: 0 !important; }
+
+/* Ocultar botón Manage App y visor de Deploy */
+.stAppDeployButton, [data-testid="stAppDeployButton"], div[class*="stDeployButton"], [data-testid="manage-app-button"] { display: none !important; opacity: 0 !important; pointer-events: none !important; }
 .viewerBadge_container, div[class*="viewerBadge"] { display: none !important; opacity: 0 !important; }
-[data-testid="stStatusWidget"] { visibility: hidden !important; height: 0px !important; }
 
 /* ================================================================= */
-/* 2. ESTILO DE PESTAÑAS (TABS) MÁS GRANDES Y LLAMATIVAS             */
-/* ================================================================= */
-/* Contenedor base de las pestañas */
-div[data-baseweb="tab-list"] {
-    border-bottom: 2px solid #BDC3C7 !important; 
-    gap: 6px !important; /* Separación un poco mayor entre pestañas */
-    padding-bottom: 0px !important;
-}
-div[data-baseweb="tab-highlight"] { display: none !important; } /* Oculta línea nativa */
-
-/* Diseño de la Pestaña Inactiva */
-button[data-baseweb="tab"] {
-    background-color: #EAECEE !important; 
-    border: 1px solid #BDC3C7 !important;
-    border-bottom: none !important;
-    border-radius: 8px 8px 0 0 !important; /* Bordes un poco más suaves */
-    padding: 16px 28px !important; /* Pestañas más altas y anchas */
-    color: #7F8C8D !important;
-    font-weight: 600 !important;
-    font-size: 18px !important; /* TEXTO MUCHO MÁS GRANDE */
-    margin-bottom: 0px !important;
-    transition: all 0.2s ease-in-out !important;
-}
-button[data-baseweb="tab"]:hover {
-    background-color: #D5DBDB !important;
-}
-
-/* Diseño de la Pestaña Activa (Seleccionada) */
-button[data-baseweb="tab"][aria-selected="true"] {
-    background-color: #E8F4F8 !important; /* FONDO AZUL TENUE CUANDO ESTÁ SELECCIONADA */
-    color: #2980B9 !important; /* Letra azul oscuro */
-    font-weight: 800 !important;
-    border: 1px solid #BDC3C7 !important;
-    border-top: 5px solid #2ECC71 !important; /* Borde superior verde un poco más grueso */
-    border-bottom: 3px solid #E8F4F8 !important; /* Del mismo color del fondo de la pestaña activa */
-    margin-bottom: -2px !important; 
-    z-index: 10 !important;
-}
-button[data-baseweb="tab"][aria-selected="true"]:hover {
-    background-color: #E8F4F8 !important; 
-}
-
-/* Espacio limpio después de las pestañas */
-div[data-baseweb="tab-panel"] {
-    padding-top: 25px !important; 
-}
-
-/* ================================================================= */
-/* 3. ESTILOS DE TARJETAS Y TABLAS                                   */
+/* 4. ESTILOS DE TARJETAS                                            */
 /* ================================================================= */
 .tarjeta-metrica { background-color: #FFFFFF; padding: 8px 10px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.04); margin-bottom: 12px; text-align: center; height: 85px !important; display: flex; flex-direction: column; justify-content: center; align-items: center; }
 .tarjeta-titulo { color: #7F8C8D; font-size: 10px; margin: 0; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; min-height: 24px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px; line-height: 1.1; }
@@ -163,7 +156,7 @@ def cargar_datos():
     return df
 
 # ==============================================================================
-# CREACIÓN DE PESTAÑAS (TABS) TIPO EXCEL (Letras grandes)
+# CREACIÓN DE PESTAÑAS (TABS) TIPO EXCEL
 # ==============================================================================
 tab_gestion, tab_produccion = st.tabs(["📁 Gestión de Expedientes", "📊 Avance de Producción"])
 
@@ -333,7 +326,7 @@ with tab_produccion:
 # ==============================================================================
 st.markdown("""
 <div style='text-align: center; margin-top: 50px; padding-top: 20px; border-top: 1px solid #E0E6ED; color: #95A5A6; font-size: 13px; font-family: sans-serif;'>
-    <b>Diseñado y Desarrollado: SDDI / tyantas</b> &nbsp;|&nbsp; 
+    <b>Diseñado y Desarrollado: Equipo de Gestión SDDI / tyantas-myps</b> &nbsp;|&nbsp; 
     <span style="color: #95A5A6;">(Entorno Asegurado)</span>
 </div>
 """, unsafe_allow_html=True)
