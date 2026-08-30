@@ -1,27 +1,17 @@
-import os
 import re
 import io
 import pandas as pd
 import streamlit as st
 
-# 1. Configuración del Tema e Interfaz
-os.makedirs(".streamlit", exist_ok=True)
-with open(".streamlit/config.toml", "w", encoding="utf-8") as f:
-    f.write('''[theme]
-primaryColor = "#2980B9"
-backgroundColor = "#F4F7F6" 
-secondaryBackgroundColor = "#EAECEE"
-textColor = "#2C3E50"
-font = "sans serif"
-''')
-
+# 1. Configuración de la Interfaz (Debe ser la primera línea)
 st.set_page_config(page_title="Trazabilidad SDDI", layout="wide", page_icon="🏛️", initial_sidebar_state="expanded")
 
 # ==============================================================================
-# LÓGICA DEL BOTÓN FLOTANTE Y CAPAS
+# LÓGICA DEL BOTÓN FLOTANTE MAESTRO Y CAPAS
 # ==============================================================================
 if 'capa_actual' not in st.session_state: st.session_state.capa_actual = 1
 if 'equipo_sel' not in st.session_state: st.session_state.equipo_sel = None
+# Por defecto mostramos la barra al iniciar
 if 'barra_oculta' not in st.session_state: st.session_state.barra_oculta = False
 
 def ir_a_capa(nivel, equipo=None):
@@ -31,107 +21,93 @@ def ir_a_capa(nivel, equipo=None):
 def toggle_barra():
     st.session_state.barra_oculta = not st.session_state.barra_oculta
 
-# Control estricto de visualización del menú
+# Control estricto por CSS de nuestra barra lateral
 if st.session_state.barra_oculta:
-    st.markdown('<style>[data-testid="stSidebar"] { display: none !important; transform: translateX(-100%) !important; }</style>', unsafe_allow_html=True)
+    st.markdown('<style>[data-testid="stSidebar"] { display: none !important; }</style>', unsafe_allow_html=True)
     btn_text = "➡️ Mostrar menú"
 else:
-    st.markdown('<style>[data-testid="stSidebar"] { display: flex !important; transform: translateX(0) !important; }</style>', unsafe_allow_html=True)
+    st.markdown('<style>[data-testid="stSidebar"] { display: flex !important; }</style>', unsafe_allow_html=True)
     btn_text = "⬅️ Ocultar menú"
 
-# Botón flotante maestro anclado con ID único
+# Botón flotante único e indestructible
 st.button(btn_text, on_click=toggle_barra, help="flotante")
 
-# 3. Estilos CSS Avanzados (Responsive & Mobile-First)
+# ==============================================================================
+# ESTILOS CSS AVANZADOS (RESPONSIVE Y ANTI-BUGS)
+# ==============================================================================
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
 html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
-.block-container { padding-top: 4rem !important; padding-bottom: 5rem !important; } /* Margen inferior para que el botón móvil no tape datos */
+.block-container { padding-top: 1.5rem !important; padding-bottom: 5rem !important; }
 
 /* ================================================================= */
-/* 1. EXTERMINIO TOTAL DE CONTROLES NATIVOS Y MARCAS DE AGUA         */
+/* 1. EXTERMINIO ABSOLUTO DE CONTROLES NATIVOS Y MARCAS DE AGUA      */
 /* ================================================================= */
-[data-testid="collapsedControl"], [data-testid="stSidebarCollapseButton"] { display: none !important; visibility: hidden !important; width: 0 !important; }
-footer, header, #MainMenu { visibility: hidden !important; display: none !important; }
-[data-testid="stHeader"] { display: none !important; }
-[data-testid="stDecoration"] { display: none !important; }
-[data-testid="stToolbar"] { display: none !important; }
-h1 a svg, h2 a svg, h3 a svg { display: none !important; } 
-
-/* Bloqueo extremo de marcas de agua */
-a[href^="https://streamlit.io"], a[href*="github.com"] { display: none !important; opacity: 0 !important; pointer-events: none !important; }
-div[class*="viewerBadge"], div[class*="stDeployButton"], [data-testid="stAppDeployButton"] { display: none !important; visibility: hidden !important; }
-
-/* ================================================================= */
-/* 2. DISEÑO INTELIGENTE DEL BOTÓN FLOTANTE (PC vs CELULAR)          */
-/* ================================================================= */
-/* BASE: Diseño para Computadoras (Arriba a la izquierda) */
-div[data-testid="stTooltipHoverTarget"] {
-    position: fixed !important;
-    top: 15px !important; 
-    left: 15px !important; 
-    z-index: 9999999 !important; 
-    width: auto !important;
+/* Matamos la flecha nativa y el header de Streamlit de raíz */
+[data-testid="collapsedControl"], [data-testid="stSidebarCollapseButton"], header[data-testid="stHeader"] { 
+    display: none !important; visibility: hidden !important; opacity: 0 !important; width: 0 !important; height: 0 !important;
 }
+
+/* Limpieza de basura visual de la nube */
+footer, #MainMenu, [data-testid="stDecoration"], [data-testid="stToolbar"] { display: none !important; visibility: hidden !important; }
+h1 a svg, h2 a svg, h3 a svg { display: none !important; } /* Clip de enlaces en títulos */
+a[href*="github.com"], a[href*="streamlit.io"] { pointer-events: none !important; display: none !important; }
+div[class*="viewerBadge"], div[class*="stDeployButton"], [data-testid="stAppDeployButton"] { display: none !important; }
+[data-testid="stStatusWidget"] { visibility: hidden !important; height: 0px !important; }
+
+/* ================================================================= */
+/* 2. DISEÑO DEL BOTÓN FLOTANTE (ADAPTATIVO)                         */
+/* ================================================================= */
+/* Formato Base del Botón */
 div[data-testid="stTooltipHoverTarget"] button {
-    background-color: #2C3E50 !important;
-    color: #FFFFFF !important;
-    border: 2px solid #FFFFFF !important;
-    border-radius: 8px !important;
-    padding: 8px 16px !important;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.2) !important;
-    font-weight: 700 !important;
-    font-size: 14px !important;
-    transition: all 0.3s ease !important;
+    background-color: #2C3E50 !important; color: #FFFFFF !important; border: 2px solid #FFFFFF !important;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3) !important; font-weight: 700 !important; transition: all 0.3s ease !important;
 }
 div[data-testid="stTooltipHoverTarget"] button:hover {
-    background-color: #E74C3C !important; color: #FFFFFF !important;
+    background-color: #E74C3C !important; transform: translateY(-3px) !important; color: #FFFFFF !important;
 }
-div[role="tooltip"], div[data-baseweb="tooltip"] { display: none !important; }
+div[role="tooltip"], div[data-baseweb="tooltip"] { display: none !important; } /* Ocultar tooltips nativos */
 
-/* REGLA MÓVIL: Si es pantalla de celular, mover el botón abajo al centro */
-@media (max-width: 768px) {
+/* Posición en PC (Pantallas grandes) */
+@media (min-width: 769px) {
     div[data-testid="stTooltipHoverTarget"] {
-        top: auto !important; 
-        bottom: 25px !important; /* Pegado al fondo */
-        left: 50% !important; /* Centrado horizontalmente */
-        transform: translateX(-50%) !important;
+        position: fixed !important; top: 52% !important; left: 20px !important; z-index: 9999999 !important; width: auto !important;
     }
     div[data-testid="stTooltipHoverTarget"] button {
-        padding: 12px 25px !important; /* Más grande para el dedo pulgar */
-        border-radius: 50px !important; /* Forma de píldora nativa de app */
-        box-shadow: 0 6px 15px rgba(0,0,0,0.4) !important;
-        font-size: 15px !important;
+        border-radius: 30px !important; padding: 8px 20px !important; font-size: 14px !important;
     }
-}
-
-/* ================================================================= */
-/* 3. BARRA LATERAL (Inteligente para PC y Celular)                  */
-/* ================================================================= */
-[data-testid="stSidebar"] {
-    min-width: 200px !important; 
-    max-width: 200px !important;
-    background-color: #EAECEE !important;
-    border-right: 1px solid #D5DBDB !important;
-}
-
-/* COMPORTAMIENTO MÓVIL: Overlay (Cortina superpuesta) */
-@media (max-width: 768px) {
+    /* En PC la barra empuja el contenido de forma natural */
     [data-testid="stSidebar"] {
-        position: fixed !important;
-        top: 0 !important;
-        left: 0 !important;
-        height: 100vh !important;
-        z-index: 9999998 !important; /* Debajo del botón flotante inferior */
-        box-shadow: 5px 0 15px rgba(0,0,0,0.2) !important;
+        min-width: 185px !important; max-width: 185px !important;
+        background-color: #EAECEE !important; border-right: 1px solid #D5DBDB !important;
     }
 }
 
-/* Pestañas del Menú */
+/* Posición en CELULAR (Pantallas pequeñas) */
+@media (max-width: 768px) {
+    div[data-testid="stTooltipHoverTarget"] {
+        position: fixed !important; bottom: 20px !important; top: auto !important; left: 50% !important; 
+        transform: translateX(-50%) !important; z-index: 9999999 !important; width: auto !important;
+    }
+    div[data-testid="stTooltipHoverTarget"] button {
+        border-radius: 50px !important; padding: 12px 28px !important; font-size: 15px !important;
+        box-shadow: 0 6px 15px rgba(0,0,0,0.4) !important; /* Más sombra para destacar sobre el contenido */
+    }
+    /* En celular la barra actúa como una cortina superpuesta (Overlay) para no aplastar los cuadros */
+    [data-testid="stSidebar"] {
+        position: fixed !important; top: 0 !important; left: 0 !important; height: 100vh !important;
+        min-width: 220px !important; max-width: 220px !important; z-index: 9999998 !important;
+        background-color: #EAECEE !important; box-shadow: 5px 0 15px rgba(0,0,0,0.3) !important;
+    }
+}
+
+/* ================================================================= */
+/* 3. ESTILOS COMPARTIDOS (Menú, Tarjetas y Cuadros)                 */
+/* ================================================================= */
 div[role="radiogroup"] > label > div:first-child { display: none !important; }
 div[role="radiogroup"] > label {
-    background-color: transparent; border-radius: 6px; padding: 12px 15px !important;
+    background-color: transparent; border-radius: 6px; padding: 10px 12px !important;
     margin-bottom: 8px !important; border-left: 4px solid transparent; transition: all 0.2s ease;
 }
 div[role="radiogroup"] > label p { font-weight: 600 !important; font-size: 14px !important; color: #5D6D7E !important; margin: 0 !important; }
@@ -145,9 +121,6 @@ div[role="radiogroup"] label[data-checked="true"]::after, div[role="radiogroup"]
     content: ""; position: absolute; left: -4px; top: 50%; transform: translateY(-50%); height: 14px; width: 4px; background-color: #E74C3C;
 }
 
-/* ================================================================= */
-/* 4. SIMETRÍA FORZADA Y CUADROS COMPACTOS                           */
-/* ================================================================= */
 .tarjeta-metrica { background-color: #FFFFFF; padding: 8px 10px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.04); margin-bottom: 12px; text-align: center; height: 85px !important; display: flex; flex-direction: column; justify-content: center; align-items: center; }
 .tarjeta-titulo { color: #7F8C8D; font-size: 10px; margin: 0; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; min-height: 24px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px; line-height: 1.1; }
 .tarjeta-valor { color: #2C3E50; font-size: 26px; margin: 0 !important; font-weight: 700; line-height: 1; }
@@ -161,6 +134,7 @@ def mostrar_encabezado(titulo, subtitulo, mostrar_volver=False):
     col_btn, col_header = st.columns([1, 11])
     with col_btn:
         if mostrar_volver:
+            st.markdown("<div style='margin-bottom: 15px;'></div>", unsafe_allow_html=True)
             if st.button("⬅️ Volver", use_container_width=True):
                 ir_a_capa(1)
                 st.rerun()
@@ -199,6 +173,7 @@ def crear_tarjeta(titulo, valor, color_borde):
 
 @st.cache_data(ttl=300, show_spinner=False)
 def cargar_datos():
+    # ¡Asegúrate de colocar tu enlace real del CSV aquí!
     url_sheet = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT1sNYxj6znXHjwEGFZH58FXR1CUGUuw6Ro7dz2Y65byi6nkGP9s5f88FbUze-QT550MeucdeSpOIWm/pub?gid=0&single=true&output=csv" 
     df = pd.read_csv(url_sheet)
     if "Profesional" in df.columns:
@@ -209,7 +184,7 @@ def cargar_datos():
 # MENU LATERAL (SIDEBAR)
 # ==============================================================================
 with st.sidebar:
-    st.markdown("<div style='margin-top: 60px;'></div>", unsafe_allow_html=True) 
+    st.markdown("<div style='margin-top: 30px;'></div>", unsafe_allow_html=True) 
     menu_seleccion = st.radio("Navegación:", ["Gestión de Expedientes", "Avance de Producción"], label_visibility="collapsed")
 
 # ==============================================================================
