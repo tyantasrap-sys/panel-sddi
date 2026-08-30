@@ -3,131 +3,50 @@ import io
 import pandas as pd
 import streamlit as st
 
-# 1. Configuración de la Interfaz (Primera línea obligatoria)
-st.set_page_config(page_title="Trazabilidad SDDI", layout="wide", page_icon="🏛️", initial_sidebar_state="expanded")
+# 1. Configuración de la Interfaz (initial_sidebar_state="collapsed" asegura que no salga la barra lateral)
+st.set_page_config(page_title="Trazabilidad SDDI", layout="wide", page_icon="🏛️", initial_sidebar_state="collapsed")
 
 # ==============================================================================
-# LÓGICA DEL BOTÓN FLOTANTE MAESTRO Y CAPAS
+# LÓGICA DE CAPAS (NAVEGACIÓN INTERNA)
 # ==============================================================================
 if 'capa_actual' not in st.session_state: st.session_state.capa_actual = 1
 if 'equipo_sel' not in st.session_state: st.session_state.equipo_sel = None
-if 'barra_oculta' not in st.session_state: st.session_state.barra_oculta = False
 
 def ir_a_capa(nivel, equipo=None):
     st.session_state.capa_actual = nivel
     if equipo is not None: st.session_state.equipo_sel = equipo
 
-def toggle_barra():
-    st.session_state.barra_oculta = not st.session_state.barra_oculta
-
-if st.session_state.barra_oculta:
-    estado_menu = '<style>[data-testid="stSidebar"] { display: none !important; transform: translateX(-100%) !important; }</style>'
-    btn_text = "☰ Menú"
-else:
-    estado_menu = '<style>[data-testid="stSidebar"] { display: flex !important; transform: translateX(0) !important; }</style>'
-    btn_text = "✖ Cerrar"
-
-# ¡ESTO ES VITAL! El botón es estrictamente el PRIMER elemento que se dibuja en la pantalla.
-# Así aseguramos que el CSS de celular lo capture siempre sin importar la marca del teléfono.
-st.button(btn_text, on_click=toggle_barra)
-
 # ==============================================================================
-# ESTILOS CSS AVANZADOS (100% COMPATIBLE CON MÓVILES - SIN ALUCINACIONES)
+# ESTILOS CSS AVANZADOS (LIMPIEZA DE MARCAS DE AGUA Y DISEÑO DE TARJETAS)
 # ==============================================================================
-st.markdown(estado_menu + """
+st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
 html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
-.block-container { padding-top: 5rem !important; padding-bottom: 2rem !important; }
+.block-container { padding-top: 2rem !important; padding-bottom: 2rem !important; }
 
-/* ================================================================= */
-/* 1. EL BOTÓN MAESTRO (UBICADO ARRIBA A LA DERECHA COMO PEDISTE)    */
-/* Capturamos estrictamente el primer elemento renderedizado         */
-/* ================================================================= */
-section.main div.block-container > div:first-child {
-    position: fixed !important;
-    top: 15px !important;
-    right: 15px !important; /* FIJADO A LA DERECHA PARA PC Y CELULAR */
-    left: auto !important;
-    z-index: 9999999 !important; /* Siempre encima de todo */
-    width: auto !important;
+/* 1. Exterminio absoluto de marcas de agua, header nativo y barra lateral */
+header[data-testid="stHeader"], [data-testid="stSidebar"], [data-testid="collapsedControl"] { display: none !important; visibility: hidden !important; width: 0 !important; height: 0 !important; }
+footer, #MainMenu, [data-testid="stDecoration"], [data-testid="stToolbar"] { display: none !important; visibility: hidden !important; }
+h1 a svg, h2 a svg, h3 a svg { display: none !important; } 
+a[href*="github.com"], a[href*="streamlit.io"] { pointer-events: none !important; display: none !important; }
+.stAppDeployButton, [data-testid="stAppDeployButton"], div[class*="stDeployButton"] { display: none !important; opacity: 0 !important; }
+.viewerBadge_container, div[class*="viewerBadge"] { display: none !important; opacity: 0 !important; }
+[data-testid="stStatusWidget"] { visibility: hidden !important; height: 0px !important; }
+
+/* 2. Estilización de las Pestañas (Tabs) para que parezcan Excel moderno */
+button[data-baseweb="tab"] {
+    font-size: 16px !important;
+    font-weight: 600 !important;
+    color: #5D6D7E !important;
+    padding-top: 15px !important;
+    padding-bottom: 15px !important;
 }
-
-section.main div.block-container > div:first-child button {
-    background-color: #2C3E50 !important;
-    color: #FFFFFF !important;
-    border: 2px solid #FFFFFF !important;
-    border-radius: 8px !important;
-    padding: 8px 20px !important;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.3) !important;
-    font-weight: 700 !important;
-    font-size: 15px !important;
-    transition: all 0.2s ease !important;
-    margin: 0 !important;
+button[data-baseweb="tab"][aria-selected="true"] {
+    color: #2980B9 !important;
 }
 
-section.main div.block-container > div:first-child button:hover {
-    background-color: #E74C3C !important;
-}
-
-/* ================================================================= */
-/* 2. EXTERMINIO DE CONTROLES NATIVOS Y MARCAS DE LA NUBE            */
-/* ================================================================= */
-/* Desaparecemos para siempre el encabezado de Streamlit y su flecha */
-header[data-testid="stHeader"], [data-testid="collapsedControl"], [data-testid="stSidebarCollapseButton"] { 
-    display: none !important; height: 0 !important; visibility: hidden !important; opacity: 0 !important;
-}
-/* Bloqueo extremo a la nube: Elimina el botón Deploy y la marca inferior */
-.stAppDeployButton, [data-testid="stAppDeployButton"], div[class*="stDeployButton"] { display: none !important; opacity: 0 !important; pointer-events: none !important; }
-.viewerBadge_container, div[class*="viewerBadge"] { display: none !important; opacity: 0 !important; pointer-events: none !important;}
-footer, #MainMenu, [data-testid="stToolbar"], [data-testid="stDecoration"] { display: none !important; }
-h1 a svg, h2 a svg, h3 a svg { display: none !important; } /* Oculta íconos de enlace en el título */
-
-/* ================================================================= */
-/* 3. BARRA LATERAL INTELIGENTE (CORTINA EN MÓVILES)                 */
-/* ================================================================= */
-[data-testid="stSidebar"] {
-    background-color: #EAECEE !important;
-    border-right: 1px solid #D5DBDB !important;
-    transition: transform 0.3s ease-in-out !important;
-}
-
-/* En PC es fija y no estorba */
-@media (min-width: 769px) {
-    [data-testid="stSidebar"] {
-        min-width: 200px !important; max-width: 200px !important;
-    }
-}
-
-/* En Celular es una cortina superpuesta por la izquierda */
-@media (max-width: 768px) {
-    [data-testid="stSidebar"] {
-        position: fixed !important; top: 0 !important; left: 0 !important; height: 100dvh !important;
-        min-width: 240px !important; max-width: 240px !important;
-        z-index: 9999998 !important; /* Justo debajo de nuestro botón */
-        box-shadow: 5px 0 20px rgba(0,0,0,0.3) !important;
-    }
-}
-
-/* ================================================================= */
-/* 4. ESTILOS COMPARTIDOS (Menú, Tarjetas y Cuadros)                 */
-/* ================================================================= */
-div[role="radiogroup"] > label > div:first-child { display: none !important; }
-div[role="radiogroup"] > label {
-    background-color: transparent; border-radius: 6px; padding: 10px 12px !important;
-    margin-bottom: 8px !important; border-left: 4px solid transparent; transition: all 0.2s ease;
-}
-div[role="radiogroup"] > label p { font-weight: 600 !important; font-size: 14px !important; color: #5D6D7E !important; margin: 0 !important; }
-div[role="radiogroup"] label[data-checked="true"], div[role="radiogroup"] label:has(input:checked) {
-    background-color: #FFFFFF !important; border-left: 4px solid #2ECC71 !important; box-shadow: 0 2px 4px rgba(0,0,0,0.05) !important;
-}
-div[role="radiogroup"] label[data-checked="true"] p, div[role="radiogroup"] label:has(input:checked) p {
-    color: #2C3E50 !important; font-weight: 800 !important;
-}
-div[role="radiogroup"] label[data-checked="true"]::after, div[role="radiogroup"] label:has(input:checked)::after {
-    content: ""; position: absolute; left: -4px; top: 50%; transform: translateY(-50%); height: 14px; width: 4px; background-color: #E74C3C;
-}
-
+/* 3. Estilos de Tarjetas */
 .tarjeta-metrica { background-color: #FFFFFF; padding: 8px 10px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.04); margin-bottom: 12px; text-align: center; height: 85px !important; display: flex; flex-direction: column; justify-content: center; align-items: center; }
 .tarjeta-titulo { color: #7F8C8D; font-size: 10px; margin: 0; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; min-height: 24px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px; line-height: 1.1; }
 .tarjeta-valor { color: #2C3E50; font-size: 26px; margin: 0 !important; font-weight: 700; line-height: 1; }
@@ -187,16 +106,14 @@ def cargar_datos():
     return df
 
 # ==============================================================================
-# MENU LATERAL (SIDEBAR)
+# CREACIÓN DE PESTAÑAS (TABS) NATIVAS
 # ==============================================================================
-with st.sidebar:
-    st.markdown("<div style='margin-top: 40px;'></div>", unsafe_allow_html=True) 
-    menu_seleccion = st.radio("Navegación:", ["Gestión de Expedientes", "Avance de Producción"], label_visibility="collapsed")
+tab_gestion, tab_produccion = st.tabs(["📁 Gestión de Expedientes", "📊 Avance de Producción"])
 
 # ==============================================================================
-# MÓDULO 1: GESTIÓN DE EXPEDIENTES
+# CONTENIDO DE LA PESTAÑA 1: GESTIÓN DE EXPEDIENTES
 # ==============================================================================
-if menu_seleccion == "Gestión de Expedientes":
+with tab_gestion:
     try:
         with st.spinner("Conectando con la base de datos..."):
             df = cargar_datos()
@@ -338,13 +255,13 @@ if menu_seleccion == "Gestión de Expedientes":
                         st.info("No hay expedientes en esta categoría.")
 
 # ==============================================================================
-# MÓDULO 2: AVANCE DE PRODUCCIÓN
+# CONTENIDO DE LA PESTAÑA 2: AVANCE DE PRODUCCIÓN
 # ==============================================================================
-elif menu_seleccion == "Avance de Producción":
-    st.markdown("<br><br><h2 style='text-align: center; color: #2C3E50;'>Estamos trabajando para integrar esta información, por lo pronto ingrese a:</h2>", unsafe_allow_html=True)
+with tab_produccion:
+    st.markdown("<br><h2 style='text-align: center; color: #2C3E50;'>Estamos trabajando para integrar esta información, por lo pronto ingrese a:</h2>", unsafe_allow_html=True)
     
     html_enlace = """
-    <div style='text-align: center; margin-top: 40px;'>
+    <div style='text-align: center; margin-top: 40px; margin-bottom: 40px;'>
         <a href="https://script.google.com/macros/s/AKfycbzNuA__KQObk_2JI8iuBxqFD5RyByc7jVHe7OudtrFrEnpIPBCc6D3SEZ0-BCofUYiJ/exec" 
            target="_blank" 
            style="background-color: #E74C3C; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
