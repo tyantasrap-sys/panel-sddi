@@ -21,12 +21,12 @@ def ir_a_capa(nivel, equipo=None):
 def toggle_barra():
     st.session_state.barra_oculta = not st.session_state.barra_oculta
 
-# Control estricto por CSS de nuestra barra lateral (CORRECCIÓN APLICADA AQUÍ)
+# Control estricto por CSS de nuestra barra lateral
 if st.session_state.barra_oculta:
     st.markdown('<style>[data-testid="stSidebar"] { display: none !important; transform: translateX(-100%) !important; }</style>', unsafe_allow_html=True)
     btn_text = "➡️ Mostrar menú"
 else:
-    # Se obliga a la barra a volver a la pantalla (transform: translateX(0)) y ser visible
+    # Se obliga a la barra a volver a la pantalla y ser visible
     st.markdown('<style>[data-testid="stSidebar"] { display: flex !important; visibility: visible !important; transform: translateX(0) !important; margin-left: 0px !important; }</style>', unsafe_allow_html=True)
     btn_text = "⬅️ Ocultar menú"
 
@@ -85,15 +85,21 @@ div[role="tooltip"], div[data-baseweb="tooltip"] { display: none !important; } /
     }
 }
 
-/* Posición en CELULAR (Pantallas pequeñas) */
+/* Posición en CELULAR (Pantallas pequeñas) -> MOVIDO A LA SUPERIOR DERECHA */
 @media (max-width: 768px) {
     div[data-testid="stTooltipHoverTarget"] {
-        position: fixed !important; bottom: 20px !important; top: auto !important; left: 50% !important; 
-        transform: translateX(-50%) !important; z-index: 9999999 !important; width: auto !important;
+        position: fixed !important; 
+        top: 15px !important; 
+        right: 15px !important; 
+        left: auto !important; /* Anulamos la regla izquierda de PC */
+        bottom: auto !important; 
+        transform: none !important; 
+        z-index: 9999999 !important; 
+        width: auto !important;
     }
     div[data-testid="stTooltipHoverTarget"] button {
-        border-radius: 50px !important; padding: 12px 28px !important; font-size: 15px !important;
-        box-shadow: 0 6px 15px rgba(0,0,0,0.4) !important; /* Más sombra para destacar sobre el contenido */
+        border-radius: 30px !important; padding: 8px 18px !important; font-size: 14px !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.4) !important; 
     }
     /* En celular la barra actúa como una cortina superpuesta (Overlay) para no aplastar los cuadros */
     [data-testid="stSidebar"] {
