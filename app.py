@@ -442,7 +442,29 @@ with tab_gestion:
                         else:
                             st.info("No existen estados procesados.")
 
+# ==============================================================================
+# CONTENIDO DE LA PESTAÑA 2: AVANCE DE PRODUCCIÓN (RESTAURADA)
+# ==============================================================================
 with tab_produccion:
-    st.markdown("<br><br><h2 style='text-align: center; color: #2C3E50;'>Tablero en Mantenimiento</h2>", unsafe_allow_html=True)
+    st.markdown("<br><br><h2 style='text-align: center; color: #2C3E50;'>Estamos trabajando para integrar esta información, por lo pronto ingrese a:</h2>", unsafe_allow_html=True)
+    
+    html_enlace = """
+    <div style='text-align: center; margin-top: 40px; margin-bottom: 40px;'>
+        <a href="https://script.google.com/macros/s/AKfycbzNuA__KQObk_2JI8iuBxqFD5RyByc7jVHe7OudtrFrEnpIPBCc6D3SEZ0-BCofUYiJ/exec" 
+           target="_blank" 
+           style="background-color: #E74C3C; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+           Tablero de Control SDDI
+        </a>
+    </div>
+    """
+    st.markdown(html_enlace, unsafe_allow_html=True)
 
-st.markdown("<div style='text-align: center; margin-top: 50px; padding-top: 20px; border-top: 1px solid #E0E6ED; color: #95A5A6; font-size: 13px;'><b>Equipo de Gestión SDDI</b></div>", unsafe_allow_html=True)
+# ==============================================================================
+# FOOTER
+# ==============================================================================
+st.markdown("""
+<div style='text-align: center; margin-top: 50px; padding-top: 20px; border-top: 1px solid #E0E6ED; color: #95A5A6; font-size: 13px; font-family: sans-serif;'>
+    <b>Diseñado y Desarrollado: Equipo de Gestión SDDI / tyantas-myps</b> &nbsp;|&nbsp; 
+    <span style="color: #95A5A6;">(Información de Trámite Transparente)</span>
+</div>
+""", unsafe_allow_html=True)
