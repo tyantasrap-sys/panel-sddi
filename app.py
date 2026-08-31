@@ -176,9 +176,9 @@ with tab_gestion:
 
         total_exp = len(df)
         tramite_activo = df[df["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False)].shape[0]
-        # CORRECCIÓN: Filtro con negación para evitar duplicidad
         flujo_lento = df[df["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False)].shape[0]
-        paralizados = df[df["Trazabilidad"].astype(str).str.contains("año|6 meses", case=False, na=False)].shape[0]
+        # CORRECCIÓN: Se agregó 'no se encontro resultado'
+        paralizados = df[df["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)].shape[0]
 
         m1, m2, m3, m4 = st.columns(4)
         with m1: crear_tarjeta("📁 Total en Trámite", total_exp, "#3498DB")
@@ -195,7 +195,8 @@ with tab_gestion:
         for idx, eq in enumerate(equipos):
             with cols_eq[idx % 4]:
                 df_eq = df[df["Equipo"] == eq]
-                criticos = df_eq[df_eq["Trazabilidad"].astype(str).str.contains("año|6 meses", case=False, na=False)].shape[0]
+                # CORRECCIÓN: Se agregó 'no se encontro resultado'
+                criticos = df_eq[df_eq["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)].shape[0]
                 st.markdown(f"""
                 <div class="tarjeta-equipo">
                     <h4 style="margin:0; color:#2C3E50; font-size:16px;">{eq}</h4>
@@ -213,9 +214,9 @@ with tab_gestion:
         mostrar_encabezado(f"Reporte Dinámico: {eq_sel}", "Evaluación detallada de estados y carga por especialista.", mostrar_volver=True)
 
         act = df_eq[df_eq["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False)].shape[0]
-        # CORRECCIÓN: Filtro con negación para evitar duplicidad
         len_f = df_eq[df_eq["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df_eq["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False)].shape[0]
-        par = df_eq[df_eq["Trazabilidad"].astype(str).str.contains("año|6 meses", case=False, na=False)].shape[0]
+        # CORRECCIÓN: Se agregó 'no se encontro resultado'
+        par = df_eq[df_eq["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)].shape[0]
 
         k1, k2, k3, k4 = st.columns(4)
         with k1: crear_tarjeta("Total Equipo", len(df_eq), "#3498DB")
@@ -231,16 +232,16 @@ with tab_gestion:
             df_p = df_eq[df_eq["Profesional"] == prof]
             
             df_sddi = df_p[df_p["Tipo Doc"].astype(str).str.contains("generado", case=False, na=False)]
-            # CORRECCIÓN: Variables separadas con filtro corregido
             s_act = sum(df_sddi["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False))
             s_len = sum(df_sddi["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df_sddi["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False))
-            s_par = sum(df_sddi["Trazabilidad"].astype(str).str.contains("año|6 meses", case=False, na=False))
+            # CORRECCIÓN: Se agregó 'no se encontro resultado'
+            s_par = sum(df_sddi["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False))
             
             df_ext = df_p[df_p["Tipo Doc"].astype(str).str.contains("Externo", case=False, na=False)]
-            # CORRECCIÓN: Variables separadas con filtro corregido
             e_act = sum(df_ext["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False))
             e_len = sum(df_ext["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df_ext["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False))
-            e_par = sum(df_ext["Trazabilidad"].astype(str).str.contains("año|6 meses", case=False, na=False))
+            # CORRECCIÓN: Se agregó 'no se encontro resultado'
+            e_par = sum(df_ext["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False))
 
             with st.expander(f"👤 {prof} — Total: {len(df_p)} expedientes en trámite"):
                 if f"f_{prof}" not in st.session_state: st.session_state[f"f_{prof}"] = "Oculto"
@@ -271,13 +272,13 @@ with tab_gestion:
                     
                     df_m = df_p.copy()
                     if f_actual == "SA": df_m = df_sddi[df_sddi["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False)]
-                    # CORRECCIÓN: Filtro también ajustado en el despliegue de las tablas individuales
                     elif f_actual == "SL": df_m = df_sddi[df_sddi["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df_sddi["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False)]
-                    elif f_actual == "SP": df_m = df_sddi[df_sddi["Trazabilidad"].astype(str).str.contains("año|6 meses", case=False, na=False)]
+                    # CORRECCIÓN: Se agregó 'no se encontro resultado'
+                    elif f_actual == "SP": df_m = df_sddi[df_sddi["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)]
                     elif f_actual == "EA": df_m = df_ext[df_ext["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False)]
-                    # CORRECCIÓN: Filtro también ajustado en el despliegue de las tablas individuales
                     elif f_actual == "EL": df_m = df_ext[df_ext["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df_ext["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False)]
-                    elif f_actual == "EP": df_m = df_ext[df_ext["Trazabilidad"].astype(str).str.contains("año|6 meses", case=False, na=False)]
+                    # CORRECCIÓN: Se agregó 'no se encontro resultado'
+                    elif f_actual == "EP": df_m = df_ext[df_ext["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)]
                     
                     if len(df_m) > 0:
                         if "Trazabilidad" in df_m.columns: df_m = df_m.sort_values(by="Trazabilidad", ascending=False)
