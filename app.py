@@ -132,9 +132,7 @@ def cargar_datos_sunarp():
 # MÓDULOS DE TRANSFORMACIÓN Y CARGA UI (ARQUITECTURA FLEXBOX)
 # ==============================================================================
 def clasificar_estados_sunarp(df_base, usuarios):
-    """
-    Transformador: Limpia y clasifica estados registrales.
-    """
+    """Transformador: Limpia y clasifica estados registrales."""
     metricas = []
     try:
         if "USUARIO_MAPEADO" not in df_base.columns or "ESTADO" not in df_base.columns:
@@ -183,19 +181,21 @@ def clasificar_estados_sunarp(df_base, usuarios):
 def generar_tarjeta_html(etiqueta, config):
     """
     Genera el HTML interno de la tarjeta. 
-    Nota: Ya no definimos márgenes externos (margin-bottom), esto lo controlará el contenedor Flexbox.
-    Ancho fijo de 115px para evitar estiramientos no deseados.
+    Ajustes aplicados: 
+    - Width reducido de 115px a 90px (~21% menos).
+    - Padding horizontal reducido a 2px.
+    - Font-size del título bajado a 8px para asegurar que encaje "EN CALIFICACIÓN".
     """
     if config["valor"] == 0:
         return ""
         
     return f"""
-    <div style="background-color: {config['bg']}; padding: 4px 6px; border-radius: 4px; 
+    <div style="background-color: {config['bg']}; padding: 4px 2px; border-radius: 4px; 
                 text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.15); 
-                height: 45px; width: 115px; flex-shrink: 0; display: flex; flex-direction: column; 
+                height: 45px; width: 90px; flex-shrink: 0; display: flex; flex-direction: column; 
                 justify-content: center; align-items: center;">
-        <div style="color: {config['color']}; font-size: 9px; font-weight: 800; 
-                    text-transform: uppercase; letter-spacing: 0.2px; line-height: 1; margin-bottom: 2px;">
+        <div style="color: {config['color']}; font-size: 8px; font-weight: 800; 
+                    text-transform: uppercase; letter-spacing: 0.1px; line-height: 1; margin-bottom: 2px;">
             {etiqueta}
         </div>
         <div style="color: {config['color']}; font-size: 20px; font-weight: 900; line-height: 1;">
@@ -358,7 +358,7 @@ with tab_gestion:
                         st.info("No hay expedientes en esta categoría.")
         
         # ==============================================================================
-        # SEGUIMIENTO TÍTULOS SUNARP (ARQUITECTURA DE RENDERIZADO FLEXBOX)
+        # SEGUIMIENTO TÍTULOS SUNARP (ARQUITECTURA DE RENDERIZADO FLEXBOX FIX)
         # ==============================================================================
         st.markdown("<hr style='border:none; border-top:1px solid #E0E6ED; margin:40px 0 20px 0;'><h4 style='color:#2C3E50;'>🏢 Seguimiento Títulos SUNARP</h4>", unsafe_allow_html=True)
         
@@ -379,22 +379,16 @@ with tab_gestion:
                 
                 with st.expander(f"👤 {usu} — Total: {data['Total']} títulos asignados", expanded=False):
                     
-                    # Extraer solo las configuraciones que tienen al menos 1 expediente
                     estados_activos = {k: v for k, v in data["Tarjetas"].items() if v["valor"] > 0}
                     
                     if estados_activos:
-                        # Reemplazamos st.columns por un contenedor CSS Flexbox (display: flex)
-                        # Esto asegura que los cuadros respeten su ancho de 115px sin deformarse.
                         html_tarjetas = ""
                         for etiqueta, config in estados_activos.items():
                             html_tarjetas += generar_tarjeta_html(etiqueta, config)
                         
-                        contenedor_flexbox = f"""
-                        <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 5px 0;">
-                            {html_tarjetas}
-                        </div>
-                        """
-                        # Un solo llamado al DOM por usuario (Mejora radical de rendimiento)
+                        # INYECCIÓN DEFENSIVA: Todo el contenedor HTML se inyecta en una sola línea.
+                        # Esto previene que el parser Markdown de Streamlit lea la indentación y pinte "</div>" en texto plano.
+                        contenedor_flexbox = f'<div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 5px 0;">{html_tarjetas}</div>'
                         st.markdown(contenedor_flexbox, unsafe_allow_html=True)
                     else:
                         st.info("No existen estados procesados para las asignaciones actuales.")
