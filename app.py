@@ -177,7 +177,6 @@ with tab_gestion:
         total_exp = len(df)
         tramite_activo = df[df["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False)].shape[0]
         flujo_lento = df[df["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False)].shape[0]
-        # CORRECCIÓN: Se agregó 'no se encontro resultado'
         paralizados = df[df["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)].shape[0]
 
         m1, m2, m3, m4 = st.columns(4)
@@ -195,7 +194,6 @@ with tab_gestion:
         for idx, eq in enumerate(equipos):
             with cols_eq[idx % 4]:
                 df_eq = df[df["Equipo"] == eq]
-                # CORRECCIÓN: Se agregó 'no se encontro resultado'
                 criticos = df_eq[df_eq["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)].shape[0]
                 st.markdown(f"""
                 <div class="tarjeta-equipo">
@@ -215,7 +213,6 @@ with tab_gestion:
 
         act = df_eq[df_eq["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False)].shape[0]
         len_f = df_eq[df_eq["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df_eq["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False)].shape[0]
-        # CORRECCIÓN: Se agregó 'no se encontro resultado'
         par = df_eq[df_eq["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)].shape[0]
 
         k1, k2, k3, k4 = st.columns(4)
@@ -234,13 +231,11 @@ with tab_gestion:
             df_sddi = df_p[df_p["Tipo Doc"].astype(str).str.contains("generado", case=False, na=False)]
             s_act = sum(df_sddi["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False))
             s_len = sum(df_sddi["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df_sddi["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False))
-            # CORRECCIÓN: Se agregó 'no se encontro resultado'
             s_par = sum(df_sddi["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False))
             
             df_ext = df_p[df_p["Tipo Doc"].astype(str).str.contains("Externo", case=False, na=False)]
             e_act = sum(df_ext["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False))
             e_len = sum(df_ext["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df_ext["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False))
-            # CORRECCIÓN: Se agregó 'no se encontro resultado'
             e_par = sum(df_ext["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False))
 
             with st.expander(f"👤 {prof} — Total: {len(df_p)} expedientes en trámite"):
@@ -273,11 +268,9 @@ with tab_gestion:
                     df_m = df_p.copy()
                     if f_actual == "SA": df_m = df_sddi[df_sddi["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False)]
                     elif f_actual == "SL": df_m = df_sddi[df_sddi["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df_sddi["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False)]
-                    # CORRECCIÓN: Se agregó 'no se encontro resultado'
                     elif f_actual == "SP": df_m = df_sddi[df_sddi["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)]
                     elif f_actual == "EA": df_m = df_ext[df_ext["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False)]
                     elif f_actual == "EL": df_m = df_ext[df_ext["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df_ext["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False)]
-                    # CORRECCIÓN: Se agregó 'no se encontro resultado'
                     elif f_actual == "EP": df_m = df_ext[df_ext["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)]
                     
                     if len(df_m) > 0:
@@ -314,6 +307,24 @@ with tab_gestion:
                             )
                     else:
                         st.info("No hay expedientes en esta categoría.")
+        
+        # ==============================================================================
+        # NUEVA SECCIÓN: SEGUIMIENTO TÍTULOS SUNARP
+        # ==============================================================================
+        st.markdown("<hr style='border:none; border-top:1px solid #E0E6ED; margin:40px 0 20px 0;'><h4 style='color:#2C3E50;'>🏢 Seguimiento Títulos SUNARP</h4>", unsafe_allow_html=True)
+        
+        usuarios_sunarp = ["VESPADIN", "VGAMARRA", "MCHAVEZ", "RJIMENEZ", "KPAJUELO"]
+        
+        for usu_sunarp in usuarios_sunarp:
+            with st.expander(f"👤 {usu_sunarp} — Resumen Consolidado"):
+                st.info("🚧 Módulo de seguimiento en construcción para la próxima etapa. Aquí se visualizarán los estados de SUNARP.", icon="📊")
+                
+                # Estructura visual temporal para que evalúes la interfaz
+                c1, c2, c3, c4 = st.columns(4)
+                c1.metric("En Calificación", "--")
+                c2.metric("Observados", "--")
+                c3.metric("Tachados", "--")
+                c4.metric("Inscritos", "--")
 
 # ==============================================================================
 # CONTENIDO DE LA PESTAÑA 2: AVANCE DE PRODUCCIÓN
