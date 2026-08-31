@@ -1,7 +1,13 @@
 import re
 import io
+import logging
 import pandas as pd
 import streamlit as st
+
+# ==============================================================================
+# CONFIGURACIÓN DEFENSIVA Y LOGGING
+# ==============================================================================
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # 1. Configuración de la Interfaz
 st.set_page_config(page_title="Trazabilidad SDDI", layout="wide", page_icon="🏛️", initial_sidebar_state="collapsed")
@@ -17,7 +23,7 @@ def ir_a_capa(nivel, equipo=None):
     if equipo is not None: st.session_state.equipo_sel = equipo
 
 # ==============================================================================
-# ESTILOS CSS AVANZADOS (PESTAÑAS TIPO EXCEL Y BOTONES AZULES)
+# ESTILOS CSS AVANZADOS
 # ==============================================================================
 st.markdown("""
 <style>
@@ -25,78 +31,23 @@ st.markdown("""
 html, body, [class*="css"], .stApp { font-family: 'Inter', sans-serif !important; background-color: #F4F7F6 !important; }
 .block-container { padding-top: 2rem !important; padding-bottom: 2rem !important; }
 
-/* ================================================================= */
-/* 1. RECUPERAR COLOR AZUL EN BOTONES (SIN CONFIG.TOML)              */
-/* ================================================================= */
-button[kind="primary"] {
-    background-color: #2980B9 !important;
-    border-color: #2980B9 !important;
-    color: white !important;
-    font-weight: 700 !important;
-}
-button[kind="primary"]:hover {
-    background-color: #1A5276 !important;
-    border-color: #1A5276 !important;
-}
+button[kind="primary"] { background-color: #2980B9 !important; border-color: #2980B9 !important; color: white !important; font-weight: 700 !important; }
+button[kind="primary"]:hover { background-color: #1A5276 !important; border-color: #1A5276 !important; }
 
-/* ================================================================= */
-/* 2. DISEÑO DE PESTAÑAS TIPO EXCEL (Selectores Extremos)            */
-/* ================================================================= */
-/* Contenedor de las pestañas */
-[data-testid="stTabs"] [data-baseweb="tab-list"] {
-    gap: 6px !important;
-    border-bottom: 2px solid #BDC3C7 !important;
-}
-/* Esconder la línea de selección por defecto de Streamlit */
-[data-testid="stTabs"] [data-baseweb="tab-highlight"] {
-    display: none !important; 
-}
-/* Pestaña Inactiva */
-[data-testid="stTabs"] [data-baseweb="tab"] {
-    background-color: #EAECEE !important;
-    border-radius: 8px 8px 0px 0px !important;
-    border: 1px solid #BDC3C7 !important;
-    border-bottom: none !important;
-    padding: 12px 24px !important;
-    margin: 0 !important;
-    transition: all 0.2s ease !important;
-}
-[data-testid="stTabs"] [data-baseweb="tab"] p {
-    font-size: 18px !important;
-    font-weight: 600 !important;
-    color: #7F8C8D !important;
-}
-[data-testid="stTabs"] [data-baseweb="tab"]:hover {
-    background-color: #D5DBDB !important;
-}
-/* Pestaña Activa (Seleccionada) */
-[data-testid="stTabs"] [data-baseweb="tab"][aria-selected="true"] {
-    background-color: #E8F4F8 !important; /* Fondo azul tenue */
-    border-top: 5px solid #2ECC71 !important; /* Borde verde superior */
-    border-bottom: 3px solid #E8F4F8 !important; /* Para tapar la línea base */
-    margin-bottom: -2px !important; /* Efecto de fusión con la hoja */
-    z-index: 99 !important;
-}
-[data-testid="stTabs"] [data-baseweb="tab"][aria-selected="true"] p {
-    color: #2980B9 !important; /* Letra azul oscuro */
-    font-weight: 900 !important;
-}
+[data-testid="stTabs"] [data-baseweb="tab-list"] { gap: 6px !important; border-bottom: 2px solid #BDC3C7 !important; }
+[data-testid="stTabs"] [data-baseweb="tab-highlight"] { display: none !important; }
+[data-testid="stTabs"] [data-baseweb="tab"] { background-color: #EAECEE !important; border-radius: 8px 8px 0px 0px !important; border: 1px solid #BDC3C7 !important; border-bottom: none !important; padding: 12px 24px !important; margin: 0 !important; transition: all 0.2s ease !important; }
+[data-testid="stTabs"] [data-baseweb="tab"] p { font-size: 18px !important; font-weight: 600 !important; color: #7F8C8D !important; }
+[data-testid="stTabs"] [data-baseweb="tab"]:hover { background-color: #D5DBDB !important; }
+[data-testid="stTabs"] [data-baseweb="tab"][aria-selected="true"] { background-color: #E8F4F8 !important; border-top: 5px solid #2ECC71 !important; border-bottom: 3px solid #E8F4F8 !important; margin-bottom: -2px !important; z-index: 99 !important; }
+[data-testid="stTabs"] [data-baseweb="tab"][aria-selected="true"] p { color: #2980B9 !important; font-weight: 900 !important; }
 
-/* ================================================================= */
-/* 3. EXTERMINIO DE MARCAS DE AGUA Y NAVEGACIÓN NATIVA               */
-/* ================================================================= */
 header[data-testid="stHeader"], [data-testid="stSidebar"], [data-testid="collapsedControl"] { display: none !important; visibility: hidden !important; width: 0 !important; height: 0 !important; }
 footer, #MainMenu, [data-testid="stDecoration"], [data-testid="stToolbar"] { display: none !important; visibility: hidden !important; }
 h1 a svg, h2 a svg, h3 a svg { display: none !important; } 
 a[href*="github.com"], a[href*="streamlit.io"] { pointer-events: none !important; display: none !important; }
-
-/* Ocultar botón Manage App y visor de Deploy */
 .stAppDeployButton, [data-testid="stAppDeployButton"], div[class*="stDeployButton"], [data-testid="manage-app-button"] { display: none !important; opacity: 0 !important; pointer-events: none !important; }
-.viewerBadge_container, div[class*="viewerBadge"] { display: none !important; opacity: 0 !important; }
 
-/* ================================================================= */
-/* 4. ESTILOS DE TARJETAS                                            */
-/* ================================================================= */
 .tarjeta-metrica { background-color: #FFFFFF; padding: 8px 10px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.04); margin-bottom: 12px; text-align: center; height: 85px !important; display: flex; flex-direction: column; justify-content: center; align-items: center; }
 .tarjeta-titulo { color: #7F8C8D; font-size: 10px; margin: 0; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; min-height: 24px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px; line-height: 1.1; }
 .tarjeta-valor { color: #2C3E50; font-size: 26px; margin: 0 !important; font-weight: 700; line-height: 1; }
@@ -147,6 +98,9 @@ def crear_tarjeta(titulo, valor, color_borde):
     </div>
     """, unsafe_allow_html=True)
 
+# ==============================================================================
+# MÓDULOS DE EXTRACCIÓN (EXTRACTORES)
+# ==============================================================================
 @st.cache_data(ttl=300, show_spinner=False)
 def cargar_datos():
     url_sheet = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT1sNYxj6znXHjwEGFZH58FXR1CUGUuw6Ro7dz2Y65byi6nkGP9s5f88FbUze-QT550MeucdeSpOIWm/pub?gid=0&single=true&output=csv" 
@@ -159,10 +113,8 @@ def cargar_datos():
 def cargar_datos_sunarp():
     url_sunarp = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTFQiw1QtTommj03HEMC0mQEQHYuyoluv9K0UP9u6GJDntCAjzOnk77RD_Plx8MoPgktulWknPjIoxd/pub?gid=0&single=true&output=csv"
     df_s = pd.read_csv(url_sunarp)
-    # Estandarizar nombres de columnas por seguridad
     df_s.columns = df_s.columns.str.strip().str.upper()
     
-    # Diccionario de traducción de nombres a usuarios institucionales
     mapeo_usuarios = {
         "CAROLINA": "MCHAVEZ",
         "VICTOR": "VGAMARRA",
@@ -175,6 +127,83 @@ def cargar_datos_sunarp():
         df_s["USUARIO_MAPEADO"] = df_s["USUARIO"].astype(str).str.strip().str.upper().map(mapeo_usuarios).fillna(df_s["USUARIO"])
         
     return df_s
+
+# ==============================================================================
+# MÓDULOS DE TRANSFORMACIÓN Y CARGA UI (NUEVA ARQUITECTURA SUNARP)
+# ==============================================================================
+def clasificar_estados_sunarp(df_base, usuarios):
+    """
+    Transformador: Filtra, limpia y clasifica los estados registrales utilizando
+    Regex defensivo. Retorna diccionarios listos para inyección HTML.
+    """
+    metricas = []
+    try:
+        if "USUARIO_MAPEADO" not in df_base.columns or "ESTADO" not in df_base.columns:
+            logging.error("Validación fallida: El DataFrame origen no contiene las cabeceras esperadas.")
+            return metricas
+
+        for usu in usuarios:
+            df_usu = df_base[df_base["USUARIO_MAPEADO"] == usu].copy()
+            total = len(df_usu)
+            
+            if total == 0:
+                continue
+
+            estados = df_usu["ESTADO"].astype(str).str.upper().str.strip()
+            
+            # Clasificación Regex y Conteo
+            insc = int(estados.str.contains("INSCRITO", case=False, na=False).sum())
+            calif = int(estados.str.contains("CALIFICACIÓN|CALIFICACION", case=False, na=False).sum())
+            tach = int(estados.str.contains("TACHADO", case=False, na=False).sum())
+            obs = int(estados.str.contains("OBSERVADO", case=False, na=False).sum())
+            liq = int(estados.str.contains("LIQUIDADO", case=False, na=False).sum())
+            reing = int(estados.str.contains("REINGRESADO", case=False, na=False).sum())
+            en_proc = int(estados.str.contains("EN PROCESO", case=False, na=False).sum())
+            
+            mask_conocidos = estados.str.contains("INSCRITO|CALIFICACIÓN|CALIFICACION|TACHADO|OBSERVADO|LIQUIDADO|REINGRESADO|EN PROCESO", case=False, na=False)
+            otros = int((~mask_conocidos & (estados != "NAN") & (estados != "")).sum())
+            
+            # Mapeo de paleta de colores según requerimientos (UI)
+            metricas.append({
+                "Usuario": usu, 
+                "Total": total,
+                "Tarjetas": {
+                    "Inscritos": {"valor": insc, "bg": "#28B463", "color": "#FFFFFF"},        # Verde
+                    "En Calificación": {"valor": calif, "bg": "#3498DB", "color": "#FFFFFF"}, # Azul
+                    "Tachados": {"valor": tach, "bg": "#8D6E63", "color": "#FFFFFF"},         # Marrón
+                    "Observados": {"valor": obs, "bg": "#E74C3C", "color": "#FFFFFF"},        # Rojo
+                    "Liquidados": {"valor": liq, "bg": "#196F3D", "color": "#FFFFFF"},        # Verde Oscuro
+                    "Reingresados": {"valor": reing, "bg": "#85C1E9", "color": "#2C3E50"},    # Celeste (texto oscuro para contraste)
+                    "En Proceso": {"valor": en_proc, "bg": "#E5E7E9", "color": "#2C3E50"},    # Gris Claro (texto oscuro)
+                    "Otros": {"valor": otros, "bg": "#95A5A6", "color": "#FFFFFF"}            # Plomo
+                }
+            })
+    except Exception as e:
+        logging.error(f"Fallo durante la transformación de datos SUNARP: {str(e)}")
+    
+    return metricas
+
+def generar_tarjeta_html(etiqueta, config):
+    """
+    Renderizador UI: Genera código HTML/CSS aislado.
+    Reduce la tipografía de métrica a 24px (~30% menos que el default de Streamlit).
+    """
+    if config["valor"] == 0:
+        return "" # Omisión defensiva para no renderizar tarjetas vacías
+        
+    return f"""
+    <div style="background-color: {config['bg']}; padding: 8px 10px; border-radius: 6px; 
+                text-align: center; margin-bottom: 10px; box-shadow: 0 3px 6px rgba(0,0,0,0.1); 
+                height: 80px; display: flex; flex-direction: column; justify-content: center;">
+        <div style="color: {config['color']}; font-size: 11px; font-weight: 700; 
+                    text-transform: uppercase; letter-spacing: 0.5px; line-height: 1.2; margin-bottom: 4px;">
+            {etiqueta}
+        </div>
+        <div style="color: {config['color']}; font-size: 24px; font-weight: 900; line-height: 1;">
+            {config['valor']}
+        </div>
+    </div>
+    """
 
 # ==============================================================================
 # CREACIÓN DE PESTAÑAS (TABS) TIPO EXCEL
@@ -330,54 +359,44 @@ with tab_gestion:
                         st.info("No hay expedientes en esta categoría.")
         
         # ==============================================================================
-        # NUEVA SECCIÓN: SEGUIMIENTO TÍTULOS SUNARP
+        # SEGUIMIENTO TÍTULOS SUNARP (UI REFACTORIZADA - SIN TABLAS DOM)
         # ==============================================================================
         st.markdown("<hr style='border:none; border-top:1px solid #E0E6ED; margin:40px 0 20px 0;'><h4 style='color:#2C3E50;'>🏢 Seguimiento Títulos SUNARP</h4>", unsafe_allow_html=True)
         
         try:
-            with st.spinner("Cargando datos de SUNARP..."):
+            with st.spinner("Sincronizando base de datos registral..."):
                 df_sunarp = cargar_datos_sunarp()
         except Exception as e:
-            st.error("Error al cargar la base de datos de SUNARP.")
+            st.error("Error crítico: Fallo de conexión o formato de origen.")
+            logging.error(f"Fallo en cargar_datos_sunarp: {str(e)}")
             df_sunarp = pd.DataFrame()
-            
-        usuarios_sunarp = ["VESPADIN", "VGAMARRA", "MCHAVEZ", "RJIMENEZ", "KPAJUELO"]
-        
+
         if not df_sunarp.empty:
-            for usu_sunarp in usuarios_sunarp:
-                # Filtrar el dataframe por el usuario mapeado (ej: MCHAVEZ)
-                if "USUARIO_MAPEADO" in df_sunarp.columns:
-                    df_usu_sunarp = df_sunarp[df_sunarp["USUARIO_MAPEADO"] == usu_sunarp]
-                else:
-                    df_usu_sunarp = pd.DataFrame()
+            usuarios_sunarp = ["VESPADIN", "VGAMARRA", "MCHAVEZ", "RJIMENEZ", "KPAJUELO"]
+            datos_procesados = clasificar_estados_sunarp(df_sunarp, usuarios_sunarp)
+            
+            for data in datos_procesados:
+                usu = data["Usuario"]
+                
+                with st.expander(f"👤 {usu} — Total: {data['Total']} títulos asignados", expanded=False):
                     
-                total_titulos = len(df_usu_sunarp)
-                
-                # Conteo dinámico basado en la columna ESTADO
-                if "ESTADO" in df_sunarp.columns:
-                    estados = df_usu_sunarp["ESTADO"].astype(str).str.upper().str.strip()
-                    en_calificacion = sum(estados.str.contains("CALIFICACIÓN|CALIFICACION", case=False, na=False))
-                    observados = sum(estados.str.contains("OBSERVADO", case=False, na=False))
-                    tachados = sum(estados.str.contains("TACHADO", case=False, na=False))
-                    inscritos = sum(estados.str.contains("INSCRITO", case=False, na=False))
-                else:
-                    en_calificacion = observados = tachados = inscritos = 0
-                
-                # Despliegue de métricas con el total de asignaciones al lado del nombre
-                with st.expander(f"👤 {usu_sunarp} — Total: {total_titulos} títulos asignados"):
-                    if total_titulos > 0:
-                        c1, c2, c3, c4 = st.columns(4)
-                        c1.metric("En Calificación", en_calificacion)
-                        c2.metric("Observados", observados)
-                        c3.metric("Tachados", tachados)
-                        c4.metric("Inscritos", inscritos)
+                    # Filtro defensivo: Extraemos solo las métricas que tienen expedientes activos (>0)
+                    estados_activos = {k: v for k, v in data["Tarjetas"].items() if v["valor"] > 0}
+                    
+                    if estados_activos:
+                        # Generación dinámica de grilla UI basada en el número de tarjetas activas
+                        columnas_tarjetas = st.columns(min(len(estados_activos), 6))
                         
-                        st.markdown("<br>", unsafe_allow_html=True)
-                        # Opcional: Mostrar tabla con el detalle de sus propios títulos
-                        columnas_sunarp_mostrar = [col for col in ["OFICINA REGISTRAL", "AÑO TITULO", "NUMERO DE TITULO O PARTIDA", "ESTADO"] if col in df_usu_sunarp.columns]
-                        st.dataframe(df_usu_sunarp[columnas_sunarp_mostrar], use_container_width=True, hide_index=True)
+                        for idx, (etiqueta, config) in enumerate(estados_activos.items()):
+                            columna_actual = columnas_tarjetas[idx % len(columnas_tarjetas)]
+                            with columna_actual:
+                                st.markdown(generar_tarjeta_html(etiqueta, config), unsafe_allow_html=True)
                     else:
-                        st.info(f"No hay títulos de SUNARP asignados actualmente a {usu_sunarp}.")
+                        st.info("No existen estados procesados para las asignaciones actuales.")
+                    
+                    # NOTA: st.dataframe ha sido eliminado por completo para optimizar el DOM.
+        else:
+            st.warning("No se detectaron registros en el flujo de SUNARP.")
 
 # ==============================================================================
 # CONTENIDO DE LA PESTAÑA 2: AVANCE DE PRODUCCIÓN
@@ -397,7 +416,7 @@ with tab_produccion:
     st.markdown(html_enlace, unsafe_allow_html=True)
 
 # ==============================================================================
-# FOOTER / FIRMA DEL DESARROLLADOR
+# FOOTER
 # ==============================================================================
 st.markdown("""
 <div style='text-align: center; margin-top: 50px; padding-top: 20px; border-top: 1px solid #E0E6ED; color: #95A5A6; font-size: 13px; font-family: sans-serif;'>
