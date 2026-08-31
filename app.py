@@ -129,7 +129,7 @@ def cargar_datos_sunarp():
     return df_s
 
 # ==============================================================================
-# MÓDULOS DE TRANSFORMACIÓN Y CARGA UI (ARQUITECTURA FLEXBOX)
+# MÓDULOS DE TRANSFORMACIÓN Y CARGA UI (NUEVA ARQUITECTURA SUNARP)
 # ==============================================================================
 def clasificar_estados_sunarp(df_base, usuarios):
     """Transformador: Limpia y clasifica estados registrales."""
@@ -180,20 +180,16 @@ def clasificar_estados_sunarp(df_base, usuarios):
 
 def generar_tarjeta_html(etiqueta, config):
     """
-    Genera el HTML interno de la tarjeta. 
-    Ajustes aplicados: 
-    - Width reducido de 115px a 90px (~21% menos).
-    - Padding horizontal reducido a 2px.
-    - Font-size del título bajado a 8px para asegurar que encaje "EN CALIFICACIÓN".
+    Renderizador UI Optimizado y Seguro.
+    Altura 45px. Se delega el control del Ancho a las columnas de Streamlit.
     """
     if config["valor"] == 0:
         return ""
         
     return f"""
-    <div style="background-color: {config['bg']}; padding: 4px 2px; border-radius: 4px; 
-                text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.15); 
-                height: 45px; width: 90px; flex-shrink: 0; display: flex; flex-direction: column; 
-                justify-content: center; align-items: center;">
+    <div style="background-color: {config['bg']}; padding: 4px 5px; border-radius: 4px; 
+                text-align: center; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.15); 
+                height: 45px; display: flex; flex-direction: column; justify-content: center; align-items: center;">
         <div style="color: {config['color']}; font-size: 8px; font-weight: 800; 
                     text-transform: uppercase; letter-spacing: 0.1px; line-height: 1; margin-bottom: 2px;">
             {etiqueta}
@@ -358,7 +354,7 @@ with tab_gestion:
                         st.info("No hay expedientes en esta categoría.")
         
         # ==============================================================================
-        # SEGUIMIENTO TÍTULOS SUNARP (ARQUITECTURA DE RENDERIZADO FLEXBOX FIX)
+        # SEGUIMIENTO TÍTULOS SUNARP (ARQUITECTURA DE RENDERIZADO ESTABLE)
         # ==============================================================================
         st.markdown("<hr style='border:none; border-top:1px solid #E0E6ED; margin:40px 0 20px 0;'><h4 style='color:#2C3E50;'>🏢 Seguimiento Títulos SUNARP</h4>", unsafe_allow_html=True)
         
@@ -382,14 +378,17 @@ with tab_gestion:
                     estados_activos = {k: v for k, v in data["Tarjetas"].items() if v["valor"] > 0}
                     
                     if estados_activos:
-                        html_tarjetas = ""
-                        for etiqueta, config in estados_activos.items():
-                            html_tarjetas += generar_tarjeta_html(etiqueta, config)
+                        # RESTAURACIÓN A MÉTODO SEGURO: 
+                        # Forzamos una grilla rígida de 8 columnas. Al haber 8 columnas, Streamlit
+                        # limita automáticamente el ancho máximo de cada tarjeta, logrando ese 20%
+                        # de espacio deseado de manera nativa sin corromper el Markdown.
+                        columnas_tarjetas = st.columns(8)
                         
-                        # INYECCIÓN DEFENSIVA: Todo el contenedor HTML se inyecta en una sola línea.
-                        # Esto previene que el parser Markdown de Streamlit lea la indentación y pinte "</div>" en texto plano.
-                        contenedor_flexbox = f'<div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 5px 0;">{html_tarjetas}</div>'
-                        st.markdown(contenedor_flexbox, unsafe_allow_html=True)
+                        idx_col = 0
+                        for etiqueta, config in estados_activos.items():
+                            with columnas_tarjetas[idx_col % 8]:
+                                st.markdown(generar_tarjeta_html(etiqueta, config), unsafe_allow_html=True)
+                            idx_col += 1
                     else:
                         st.info("No existen estados procesados para las asignaciones actuales.")
         else:
