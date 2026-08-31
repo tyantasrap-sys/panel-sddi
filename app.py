@@ -155,6 +155,27 @@ def cargar_datos():
         df["Profesional"] = df["Profesional"].astype(str).apply(lambda x: re.sub(r'[1Xx]+$', '', x.strip()) if pd.notna(x) else x)
     return df
 
+@st.cache_data(ttl=300, show_spinner=False)
+def cargar_datos_sunarp():
+    url_sunarp = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTFQiw1QtTommjO3HEMCOmQEQHYuyoluv9KOUP9u6GJDntCAjzOnk77RD_Plx8MoPgktulWknPjloxd/pub?gid=0&single=true&output=csv"
+    df_s = pd.read_csv(url_sunarp)
+    # Estandarizar nombres de columnas por seguridad
+    df_s.columns = df_s.columns.str.strip().str.upper()
+    
+    # Diccionario de traducción de nombres a usuarios institucionales
+    mapeo_usuarios = {
+        "CAROLINA": "MCHAVEZ",
+        "VICTOR": "VGAMARRA",
+        "VALERIA": "VESPADIN",
+        "RICARDO": "RJIMENEZ",
+        "KATHERINE": "KPAJUELO"
+    }
+    
+    if "USUARIO" in df_s.columns:
+        df_s["USUARIO_MAPEADO"] = df_s["USUARIO"].astype(str).str.strip().str.upper().map(mapeo_usuarios).fillna(df_s["USUARIO"])
+        
+    return df_s
+
 # ==============================================================================
 # CREACIÓN DE PESTAÑAS (TABS) TIPO EXCEL
 # ==============================================================================
@@ -168,7 +189,7 @@ with tab_gestion:
         with st.spinner("Conectando con la base de datos..."):
             df = cargar_datos()
     except Exception as e:
-        st.error("Error al conectar con la base de datos. Asegúrate de colocar un enlace CSV válido en 'url_sheet'.")
+        st.error("Error al conectar con la base de datos de Gestión. Asegúrate de colocar un enlace CSV válido en 'url_sheet'.")
         st.stop()
 
     if st.session_state.capa_actual == 1:
@@ -313,18 +334,50 @@ with tab_gestion:
         # ==============================================================================
         st.markdown("<hr style='border:none; border-top:1px solid #E0E6ED; margin:40px 0 20px 0;'><h4 style='color:#2C3E50;'>🏢 Seguimiento Títulos SUNARP</h4>", unsafe_allow_html=True)
         
+        try:
+            with st.spinner("Cargando datos de SUNARP..."):
+                df_sunarp = cargar_datos_sunarp()
+        except Exception as e:
+            st.error("Error al cargar la base de datos de SUNARP.")
+            df_sunarp = pd.DataFrame()
+            
         usuarios_sunarp = ["VESPADIN", "VGAMARRA", "MCHAVEZ", "RJIMENEZ", "KPAJUELO"]
         
-        for usu_sunarp in usuarios_sunarp:
-            with st.expander(f"👤 {usu_sunarp} — Resumen Consolidado"):
-                st.info("🚧 Módulo de seguimiento en construcción para la próxima etapa. Aquí se visualizarán los estados de SUNARP.", icon="📊")
+        if not df_sunarp.empty:
+            for usu_sunarp in usuarios_sunarp:
+                # Filtrar el dataframe por el usuario mapeado (ej: MCHAVEZ)
+                if "USUARIO_MAPEADO" in df_sunarp.columns:
+                    df_usu_sunarp = df_sunarp[df_sunarp["USUARIO_MAPEADO"] == usu_sunarp]
+                else:
+                    df_usu_sunarp = pd.DataFrame()
+                    
+                total_titulos = len(df_usu_sunarp)
                 
-                # Estructura visual temporal para que evalúes la interfaz
-                c1, c2, c3, c4 = st.columns(4)
-                c1.metric("En Calificación", "--")
-                c2.metric("Observados", "--")
-                c3.metric("Tachados", "--")
-                c4.metric("Inscritos", "--")
+                # Conteo dinámico basado en la columna ESTADO
+                if "ESTADO" in df_sunarp.columns:
+                    estados = df_usu_sunarp["ESTADO"].astype(str).str.upper().str.strip()
+                    en_calificacion = sum(estados.str.contains("CALIFICACIÓN|CALIFICACION", case=False, na=False))
+                    observados = sum(estados.str.contains("OBSERVADO", case=False, na=False))
+                    tachados = sum(estados.str.contains("TACHADO", case=False, na=False))
+                    inscritos = sum(estados.str.contains("INSCRITO", case=False, na=False))
+                else:
+                    en_calificacion = observados = tachados = inscritos = 0
+                
+                # Despliegue de métricas con el total de asignaciones al lado del nombre
+                with st.expander(f"👤 {usu_sunarp} — Total: {total_titulos} títulos asignados"):
+                    if total_titulos > 0:
+                        c1, c2, c3, c4 = st.columns(4)
+                        c1.metric("En Calificación", en_calificacion)
+                        c2.metric("Observados", observados)
+                        c3.metric("Tachados", tachados)
+                        c4.metric("Inscritos", inscritos)
+                        
+                        st.markdown("<br>", unsafe_allow_html=True)
+                        # Opcional: Mostrar tabla con el detalle de sus propios títulos
+                        columnas_sunarp_mostrar = [col for col in ["OFICINA REGISTRAL", "AÑO TITULO", "NUMERO DE TITULO O PARTIDA", "ESTADO"] if col in df_usu_sunarp.columns]
+                        st.dataframe(df_usu_sunarp[columnas_sunarp_mostrar], use_container_width=True, hide_index=True)
+                    else:
+                        st.info(f"No hay títulos de SUNARP asignados actualmente a {usu_sunarp}.")
 
 # ==============================================================================
 # CONTENIDO DE LA PESTAÑA 2: AVANCE DE PRODUCCIÓN
