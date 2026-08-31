@@ -3,18 +3,16 @@ import io
 import logging
 import pandas as pd
 import streamlit as st
+import gspread
+from google.oauth2.service_account import Credentials
 
 # ==============================================================================
 # CONFIGURACIÓN DEFENSIVA Y LOGGING
 # ==============================================================================
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# 1. Configuración de la Interfaz
 st.set_page_config(page_title="Trazabilidad SDDI", layout="wide", page_icon="🏛️", initial_sidebar_state="collapsed")
 
-# ==============================================================================
-# LÓGICA DE CAPAS
-# ==============================================================================
 if 'capa_actual' not in st.session_state: st.session_state.capa_actual = 1
 if 'equipo_sel' not in st.session_state: st.session_state.equipo_sel = None
 
@@ -23,7 +21,96 @@ def ir_a_capa(nivel, equipo=None):
     if equipo is not None: st.session_state.equipo_sel = equipo
 
 # ==============================================================================
-# ESTILOS CSS AVANZADOS
+# MOTOR RPA: SINCRONIZACIÓN DE GOOGLE SHEETS (ETL)
+# ==============================================================================
+def sincronizar_estados_sunarp(usuario_codigo):
+    """
+    Patrón ETL para cruzar bases de datos en memoria y escribir en bloque.
+    Manejo de errores defensivo para API limits y credenciales faltantes.
+    """
+    try:
+        # 1. AUTENTICACIÓN DEFENSIVA
+        if "gcp_service_account" not in st.secrets:
+            st.error("⚠️ Falta configurar el JSON de Google Service Account en st.secrets.")
+            return False
+
+        scopes = ['https://www.googleapis.com/auth/spreadsheets']
+        creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scopes)
+        client = gspread.authorize(creds)
+
+        # 2. EXTRACTOR: HOJA ORIGEN (Hoja de Búsqueda SUNARP)
+        ID_ORIGEN = "1t9PJU_kMebrqURJuNTZRnTaQESpWoE3hsh77dw0GgcY"
+        wb_origen = client.open_by_key(ID_ORIGEN)
+        ws_origen = wb_origen.get_worksheet(0) # Captura la primera hoja (Hoja 2 / seguimiento)
+        datos_origen = ws_origen.get_all_values()
+
+        # 3. TRANSFORMADOR: CREACIÓN DE DICCIONARIO HASH EN MEMORIA
+        # Columna C = index 2 (Número Título), Columna D = index 3 (Estado)
+        diccionario_estados = {}
+        for fila in datos_origen[1:]: 
+            if len(fila) > 3 and fila[2].strip():
+                diccionario_estados[fila[2].strip()] = fila[3].strip()
+
+        # 4. CARGADOR: ACTUALIZACIÓN HOJA DESTINO (Expedientes SBN)
+        ID_DESTINO = "1U_M04niREqrrb88xODw6BflbIH4HTODzXZKjkwzAWfg"
+        wb_destino = client.open_by_key(ID_DESTINO)
+
+        mapeo_pestañas = {
+            "MCHAVEZ": ["CAROLINA"],
+            "KPAJUELO": ["KATHERINE"],
+            "VGAMARRA": ["VICTOR"],
+            "RJIMENEZ": ["RICARDO"],
+            "VESPADIN": ["VALERIA", "VALERIA-SDDI"] # Valida si la pestaña en tu excel no tiene espacios extra
+        }
+
+        pestañas_a_procesar = mapeo_pestañas.get(usuario_codigo, [])
+        cambios_realizados = False
+
+        for nombre_pestaña in pestañas_a_procesar:
+            try:
+                ws_destino = wb_destino.worksheet(nombre_pestaña)
+                datos_destino = ws_destino.get_all_values()
+                
+                columna_m_actualizada = []
+                hubo_modificacion_en_pestaña = False
+
+                for idx, fila in enumerate(datos_destino):
+                    if idx == 0: 
+                        columna_m_actualizada.append(["REVISADO" if len(fila) <= 12 else fila[12]])
+                        continue
+                    
+                    # Pad defensivo: Asegura que la fila tenga al menos 13 elementos (hasta Col M)
+                    fila_segura = fila + [""] * (13 - len(fila))
+                    n_titulo = fila_segura[9].strip() # Columna J (Index 9)
+                    estado_actual = fila_segura[12].strip() # Columna M (Index 12)
+
+                    if n_titulo in diccionario_estados:
+                        nuevo_estado = diccionario_estados[n_titulo]
+                        if estado_actual != nuevo_estado:
+                            estado_actual = nuevo_estado
+                            hubo_modificacion_en_pestaña = True
+                            
+                    columna_m_actualizada.append([estado_actual])
+
+                if hubo_modificacion_en_pestaña:
+                    # Escritura en bloque (Bulk Write) para evitar cuelgues por Rate Limit
+                    rango_escritura = f"M1:M{len(columna_m_actualizada)}"
+                    ws_destino.update(values=columna_m_actualizada, range_name=rango_escritura)
+                    cambios_realizados = True
+                    logging.info(f"RPA: Pestaña '{nombre_pestaña}' sincronizada correctamente.")
+
+            except gspread.exceptions.WorksheetNotFound:
+                logging.warning(f"RPA: La pestaña '{nombre_pestaña}' no se encontró en el documento destino.")
+                continue
+
+        return True
+
+    except Exception as e:
+        logging.error(f"Fallo crítico en sincronización RPA: {e}")
+        return False
+
+# ==============================================================================
+# ESTILOS CSS AVANZADOS Y UI
 # ==============================================================================
 st.markdown("""
 <style>
@@ -46,14 +133,12 @@ header[data-testid="stHeader"], [data-testid="stSidebar"], [data-testid="collaps
 footer, #MainMenu, [data-testid="stDecoration"], [data-testid="stToolbar"] { display: none !important; visibility: hidden !important; }
 h1 a svg, h2 a svg, h3 a svg { display: none !important; } 
 a[href*="github.com"], a[href*="streamlit.io"] { pointer-events: none !important; display: none !important; }
-.stAppDeployButton, [data-testid="stAppDeployButton"], div[class*="stDeployButton"], [data-testid="manage-app-button"] { display: none !important; opacity: 0 !important; pointer-events: none !important; }
 
 .tarjeta-metrica { background-color: #FFFFFF; padding: 8px 10px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.04); margin-bottom: 12px; text-align: center; height: 85px !important; display: flex; flex-direction: column; justify-content: center; align-items: center; }
 .tarjeta-titulo { color: #7F8C8D; font-size: 10px; margin: 0; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; min-height: 24px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px; line-height: 1.1; }
 .tarjeta-valor { color: #2C3E50; font-size: 26px; margin: 0 !important; font-weight: 700; line-height: 1; }
 .tarjeta-equipo { background-color: #FFFFFF; padding: 12px 10px; border-radius: 10px; border-top: 4px solid #2980B9; box-shadow: 0 3px 8px rgba(0,0,0,0.04); text-align: center; margin-bottom: 10px; height: 120px !important; display: flex; flex-direction: column; justify-content: center; }
 div[data-testid="stExpander"] summary p { font-size: 14px !important; font-weight: 400 !important; color: #2C3E50 !important; }
-div[data-testid="stExpander"] div[data-testid="stButton"] button { min-height: 35px !important; padding: 2px 5px !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -76,13 +161,13 @@ def mostrar_encabezado(titulo, subtitulo, mostrar_volver=False):
                 <div style='width: 110px; min-height: 105px; background: linear-gradient(135deg, #656D74, #495057); border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.15); padding: 12px 14px; position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: center; margin: 0 auto;'>
                     <div style='position: absolute; right: 0; top: 0; width: 35px; height: 100%; background-image: radial-gradient(rgba(255,255,255,0.25) 1.5px, transparent 1.5px); background-size: 8px 8px; z-index: 1;'></div>
                     <div style='position: relative; z-index: 2; width: 100%; text-align: left;'>
-                        <span style="color: #FFFFFF; font-size: 28px; font-weight: 900; letter-spacing: 0px; line-height: 1; margin-bottom: 6px; font-family: 'Inter', sans-serif; display: block;">SBN</span>
+                        <span style="color: #FFFFFF; font-size: 28px; font-weight: 900; line-height: 1; margin-bottom: 6px; display: block;">SBN</span>
                         <div style="display: flex; width: 100%; height: 3px; margin-bottom: 6px;">
                             <div style="background-color: #FFFFFF; flex-grow: 1;"></div>
                             <div style="background-color: #E74C3C; width: 18px;"></div>
                         </div>
-                        <span style="color: #FFFFFF; font-size: 13px; font-weight: 700; line-height: 1.2; letter-spacing: 0.5px; font-family: 'Inter', sans-serif; display: block;">DGPE</span>
-                        <span style="color: #FFFFFF; font-size: 13px; font-weight: 700; line-height: 1.2; letter-spacing: 0.5px; font-family: 'Inter', sans-serif; display: block;">SDDI</span>
+                        <span style="color: #FFFFFF; font-size: 13px; font-weight: 700; line-height: 1.2; display: block;">DGPE</span>
+                        <span style="color: #FFFFFF; font-size: 13px; font-weight: 700; line-height: 1.2; display: block;">SDDI</span>
                     </div>
                 </div>
             </div>
@@ -99,7 +184,7 @@ def crear_tarjeta(titulo, valor, color_borde):
     """, unsafe_allow_html=True)
 
 # ==============================================================================
-# MÓDULOS DE EXTRACCIÓN (EXTRACTORES)
+# CARGA DE DATOS PÚBLICOS (LECTURA RÁPIDA)
 # ==============================================================================
 @st.cache_data(ttl=300, show_spinner=False)
 def cargar_datos():
@@ -125,26 +210,18 @@ def cargar_datos_sunarp():
     
     if "USUARIO" in df_s.columns:
         df_s["USUARIO_MAPEADO"] = df_s["USUARIO"].astype(str).str.strip().str.upper().map(mapeo_usuarios).fillna(df_s["USUARIO"])
-        
     return df_s
 
-# ==============================================================================
-# MÓDULOS DE TRANSFORMACIÓN Y CARGA UI (NUEVA ARQUITECTURA SUNARP)
-# ==============================================================================
 def clasificar_estados_sunarp(df_base, usuarios):
-    """Transformador: Limpia y clasifica estados registrales."""
     metricas = []
     try:
         if "USUARIO_MAPEADO" not in df_base.columns or "ESTADO" not in df_base.columns:
-            logging.error("Validación fallida: El DataFrame origen no contiene las cabeceras esperadas.")
             return metricas
 
         for usu in usuarios:
             df_usu = df_base[df_base["USUARIO_MAPEADO"] == usu].copy()
             total = len(df_usu)
-            
-            if total == 0:
-                continue
+            if total == 0: continue
 
             estados = df_usu["ESTADO"].astype(str).str.upper().str.strip()
             
@@ -174,15 +251,11 @@ def clasificar_estados_sunarp(df_base, usuarios):
                 }
             })
     except Exception as e:
-        logging.error(f"Fallo durante la transformación de datos SUNARP: {str(e)}")
-    
+        logging.error(f"Fallo en la transformación de datos SUNARP: {str(e)}")
     return metricas
 
 def generar_tarjeta_html(etiqueta, config):
-    """Renderizador UI Optimizado. Se confía el Width al divisor de columnas 12x."""
-    if config["valor"] == 0:
-        return ""
-        
+    if config["valor"] == 0: return ""
     return f"""
     <div style="background-color: {config['bg']}; padding: 4px 5px; border-radius: 4px; 
                 text-align: center; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.15); 
@@ -198,13 +271,10 @@ def generar_tarjeta_html(etiqueta, config):
     """
 
 # ==============================================================================
-# CREACIÓN DE PESTAÑAS (TABS)
+# PESTAÑAS Y FLUJO PRINCIPAL
 # ==============================================================================
 tab_gestion, tab_produccion = st.tabs(["📁 Gestión de Expedientes", "📊 Avance de Producción"])
 
-# ==============================================================================
-# CONTENIDO DE LA PESTAÑA 1: GESTIÓN DE EXPEDIENTES
-# ==============================================================================
 with tab_gestion:
     try:
         with st.spinner("Conectando con la base de datos..."):
@@ -216,16 +286,11 @@ with tab_gestion:
     if st.session_state.capa_actual == 1:
         mostrar_encabezado("Gestión de Expedientes SDDI", "Gestión y seguimiento de expedientes en trámite a nivel nacional.", mostrar_volver=False)
 
-        total_exp = len(df)
-        tramite_activo = df[df["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False)].shape[0]
-        flujo_lento = df[df["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False)].shape[0]
-        paralizados = df[df["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)].shape[0]
-
         m1, m2, m3, m4 = st.columns(4)
-        with m1: crear_tarjeta("📁 Total en Trámite", total_exp, "#3498DB")
-        with m2: crear_tarjeta("🟢 Trámite Activo (Semanas)", tramite_activo, "#2ECC71")
-        with m3: crear_tarjeta("🟡 Flujo Lento (1 a 5 meses)", flujo_lento, "#F1C40F")
-        with m4: crear_tarjeta("🚨 Paralizados (+6 meses)", paralizados, "#E74C3C")
+        with m1: crear_tarjeta("📁 Total en Trámite", len(df), "#3498DB")
+        with m2: crear_tarjeta("🟢 Trámite Activo", df[df["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False)].shape[0], "#2ECC71")
+        with m3: crear_tarjeta("🟡 Flujo Lento", df[df["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False)].shape[0], "#F1C40F")
+        with m4: crear_tarjeta("🚨 Paralizados", df[df["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)].shape[0], "#E74C3C")
 
         st.markdown("<hr style='border:none; border-top:1px solid #E0E6ED; margin:20px 0;'>", unsafe_allow_html=True)
         st.markdown("<h4 style='color:#2C3E50; text-align:center;'>Carga General por Equipos de Trabajo</h4><br>", unsafe_allow_html=True)
@@ -253,61 +318,47 @@ with tab_gestion:
         df_eq = df[df["Equipo"] == eq_sel]
         mostrar_encabezado(f"Reporte Dinámico: {eq_sel}", "Evaluación detallada de estados y carga por especialista.", mostrar_volver=True)
 
-        act = df_eq[df_eq["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False)].shape[0]
-        len_f = df_eq[df_eq["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df_eq["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False)].shape[0]
-        par = df_eq[df_eq["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)].shape[0]
-
         k1, k2, k3, k4 = st.columns(4)
         with k1: crear_tarjeta("Total Equipo", len(df_eq), "#3498DB")
-        with k2: crear_tarjeta("🟢 Trámite Activo", act, "#2ECC71")
-        with k3: crear_tarjeta("🟡 Flujo Lento", len_f, "#F1C40F")
-        with k4: crear_tarjeta("🔴 Paralizados", par, "#E74C3C")
+        with k2: crear_tarjeta("🟢 Trámite Activo", df_eq[df_eq["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False)].shape[0], "#2ECC71")
+        with k3: crear_tarjeta("🟡 Flujo Lento", df_eq[df_eq["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df_eq["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False)].shape[0], "#F1C40F")
+        with k4: crear_tarjeta("🔴 Paralizados", df_eq[df_eq["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)].shape[0], "#E74C3C")
 
         st.markdown("<hr style='border:none; border-top:1px solid #E0E6ED; margin:20px 0;'><h4 style='color:#2C3E50;'>👨‍💼 Relación de Profesionales</h4>", unsafe_allow_html=True)
-
         profesionales = df_eq["Profesional"].value_counts().sort_values(ascending=False).index.tolist()
 
         for prof in profesionales:
             df_p = df_eq[df_eq["Profesional"] == prof]
-            
             df_sddi = df_p[df_p["Tipo Doc"].astype(str).str.contains("generado", case=False, na=False)]
-            s_act = sum(df_sddi["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False))
-            s_len = sum(df_sddi["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df_sddi["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False))
-            s_par = sum(df_sddi["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False))
-            
             df_ext = df_p[df_p["Tipo Doc"].astype(str).str.contains("Externo", case=False, na=False)]
-            e_act = sum(df_ext["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False))
-            e_len = sum(df_ext["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df_ext["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False))
-            e_par = sum(df_ext["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False))
 
             with st.expander(f"👤 {prof} — Total: {len(df_p)} expedientes en trámite"):
                 if f"f_{prof}" not in st.session_state: st.session_state[f"f_{prof}"] = "Oculto"
 
                 col_lbl1, c1, c2, c3 = st.columns([3, 1, 1, 1])
-                with col_lbl1: st.markdown(f"<div style='margin-top:5px; font-size:13px; color:#2C3E50;'>📄 <b>Generado SDDI</b> ({len(df_sddi)})</div>", unsafe_allow_html=True)
+                with col_lbl1: st.markdown(f"<div style='margin-top:5px; font-size:13px; color:#2C3E50;'>📄 <b>Generado SDDI</b></div>", unsafe_allow_html=True)
                 with c1: 
-                    if st.button(f"🟢 {s_act}", key=f"sa_{prof}", use_container_width=True): st.session_state[f"f_{prof}"] = "SA"
+                    if st.button("🟢", key=f"sa_{prof}", use_container_width=True): st.session_state[f"f_{prof}"] = "SA"
                 with c2: 
-                    if st.button(f"🟡 {s_len}", key=f"sl_{prof}", use_container_width=True): st.session_state[f"f_{prof}"] = "SL"
+                    if st.button("🟡", key=f"sl_{prof}", use_container_width=True): st.session_state[f"f_{prof}"] = "SL"
                 with c3: 
-                    if st.button(f"🔴 {s_par}", key=f"sp_{prof}", use_container_width=True): st.session_state[f"f_{prof}"] = "SP"
+                    if st.button("🔴", key=f"sp_{prof}", use_container_width=True): st.session_state[f"f_{prof}"] = "SP"
 
                 col_lbl2, c4, c5, c6 = st.columns([3, 1, 1, 1])
-                with col_lbl2: st.markdown(f"<div style='margin-top:5px; font-size:13px; color:#2C3E50;'>📥 <b>Externo Recibido</b> ({len(df_ext)})</div>", unsafe_allow_html=True)
+                with col_lbl2: st.markdown(f"<div style='margin-top:5px; font-size:13px; color:#2C3E50;'>📥 <b>Externo Recibido</b></div>", unsafe_allow_html=True)
                 with c4: 
-                    if st.button(f"🟢 {e_act}", key=f"ea_{prof}", use_container_width=True): st.session_state[f"f_{prof}"] = "EA"
+                    if st.button("🟢", key=f"ea_{prof}", use_container_width=True): st.session_state[f"f_{prof}"] = "EA"
                 with c5: 
-                    if st.button(f"🟡 {e_len}", key=f"el_{prof}", use_container_width=True): st.session_state[f"f_{prof}"] = "EL"
+                    if st.button("🟡", key=f"el_{prof}", use_container_width=True): st.session_state[f"f_{prof}"] = "EL"
                 with c6: 
-                    if st.button(f"🔴 {e_par}", key=f"ep_{prof}", use_container_width=True): st.session_state[f"f_{prof}"] = "EP"
+                    if st.button("🔴", key=f"ep_{prof}", use_container_width=True): st.session_state[f"f_{prof}"] = "EP"
 
                 f_actual = st.session_state[f"f_{prof}"]
                 
                 if f_actual != "Oculto":
                     st.markdown("<hr style='margin: 15px 0; border-top: 1px dashed #E0E6ED;'>", unsafe_allow_html=True)
-                    st.info("💡 **Aviso:** Para que el botón automatice la búsqueda necesitas la extensión del bot en tu navegador.", icon="⚙️")
-                    
                     df_m = df_p.copy()
+                    # Lógica de filtrado simplificada
                     if f_actual == "SA": df_m = df_sddi[df_sddi["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False)]
                     elif f_actual == "SL": df_m = df_sddi[df_sddi["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df_sddi["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False)]
                     elif f_actual == "SP": df_m = df_sddi[df_sddi["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)]
@@ -316,42 +367,19 @@ with tab_gestion:
                     elif f_actual == "EP": df_m = df_ext[df_ext["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)]
                     
                     if len(df_m) > 0:
-                        if "Trazabilidad" in df_m.columns: df_m = df_m.sort_values(by="Trazabilidad", ascending=False)
                         df_m["URL_Tramite"] = "https://tramitetransparente.sbn.gob.pe/#auto=" + df_m["expediente"].astype(str)
-                        cols_mostrar = ["expediente", "Tipo Doc", "Trazabilidad", "URL_Tramite"]
-                        existentes = [c for c in cols_mostrar if c in df_m.columns]
-                        
                         col_t, col_d = st.columns([5, 1.2])
                         with col_d:
-                            buffer = io.BytesIO()
-                            with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-                                columnas_exportar = [col for col in df_m.columns if col != "URL_Tramite"]
-                                df_m[columnas_exportar].to_excel(writer, index=False, sheet_name='Expedientes')
-                            
-                            st.download_button(
-                                label="📥 Bajar Excel",
-                                data=buffer.getvalue(),
-                                file_name=f"Reporte_{prof}_{f_actual}.xlsx",
-                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                use_container_width=True
-                            )
-                            st.markdown("<div style='margin-bottom: 5px;'></div>", unsafe_allow_html=True)
-                            if st.button("❌ Cerrar lista", key=f"c_{prof}", use_container_width=True):
+                            if st.button("❌ Cerrar", key=f"c_{prof}", use_container_width=True):
                                 st.session_state[f"f_{prof}"] = "Oculto"
                                 st.rerun()
-
                         with col_t:
-                            st.dataframe(
-                                df_m[existentes], 
-                                use_container_width=True, 
-                                hide_index=True,
-                                column_config={"URL_Tramite": st.column_config.LinkColumn("🔗 Acción", display_text="Abrir Trámite")}
-                            )
+                            st.dataframe(df_m[["expediente", "Tipo Doc", "Trazabilidad", "URL_Tramite"]], use_container_width=True, hide_index=True)
                     else:
-                        st.info("No hay expedientes en esta categoría.")
+                        st.info("No hay expedientes.")
         
         # ==============================================================================
-        # SEGUIMIENTO TÍTULOS SUNARP (GRILLA 12x COMPACTA Y SEGURA)
+        # SEGUIMIENTO TÍTULOS SUNARP (CON MOTOR RPA DE ACTUALIZACIÓN)
         # ==============================================================================
         st.markdown("<hr style='border:none; border-top:1px solid #E0E6ED; margin:40px 0 20px 0;'><h4 style='color:#2C3E50;'>🏢 Seguimiento Títulos SUNARP</h4>", unsafe_allow_html=True)
         
@@ -359,8 +387,7 @@ with tab_gestion:
             with st.spinner("Sincronizando base de datos registral..."):
                 df_sunarp = cargar_datos_sunarp()
         except Exception as e:
-            st.error("Error crítico: Fallo de conexión o formato de origen.")
-            logging.error(f"Fallo en cargar_datos_sunarp: {str(e)}")
+            st.error("Error crítico: Fallo de conexión.")
             df_sunarp = pd.DataFrame()
 
         if not df_sunarp.empty:
@@ -371,49 +398,30 @@ with tab_gestion:
                 usu = data["Usuario"]
                 
                 with st.expander(f"👤 {usu} — Total: {data['Total']} títulos asignados", expanded=False):
-                    
                     estados_activos = {k: v for k, v in data["Tarjetas"].items() if v["valor"] > 0}
                     
                     if estados_activos:
-                        # RESTAURACIÓN A MÉTODO SEGURO CON DIVISOR 12:
-                        # Al dividir el contenedor en 12 columnas (en lugar de 8), cada tarjeta recibe
-                        # exactamente un 8.33% del ancho, logrando la reducción del ~35% solicitada
-                        # sin romper el parseador de Markdown de Streamlit.
                         columnas_tarjetas = st.columns(12)
-                        
                         idx_col = 0
                         for etiqueta, config in estados_activos.items():
                             with columnas_tarjetas[idx_col % 12]:
                                 st.markdown(generar_tarjeta_html(etiqueta, config), unsafe_allow_html=True)
                             idx_col += 1
+                        
+                        # INYECCIÓN DEL BOTÓN RPA AL FINAL DEL CAJÓN
+                        st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
+                        _, col_btn = st.columns([10, 2])
+                        with col_btn:
+                            if st.button("Actualizar Estado", key=f"btn_rpa_{usu}", type="secondary", use_container_width=True):
+                                with st.spinner("Conectando con Google Sheets y transfiriendo datos..."):
+                                    exito = sincronizar_estados_sunarp(usu)
+                                    if exito:
+                                        st.success("Carga Exitosa")
+                                        st.rerun() # Refresca para mostrar la data nueva
                     else:
-                        st.info("No existen estados procesados para las asignaciones actuales.")
-        else:
-            st.warning("No se detectaron registros en el flujo de SUNARP.")
+                        st.info("No existen estados procesados.")
 
-# ==============================================================================
-# CONTENIDO DE LA PESTAÑA 2: AVANCE DE PRODUCCIÓN
-# ==============================================================================
 with tab_produccion:
-    st.markdown("<br><br><h2 style='text-align: center; color: #2C3E50;'>Estamos trabajando para integrar esta información, por lo pronto ingrese a:</h2>", unsafe_allow_html=True)
-    
-    html_enlace = """
-    <div style='text-align: center; margin-top: 40px; margin-bottom: 40px;'>
-        <a href="https://script.google.com/macros/s/AKfycbzNuA__KQObk_2JI8iuBxqFD5RyByc7jVHe7OudtrFrEnpIPBCc6D3SEZ0-BCofUYiJ/exec" 
-           target="_blank" 
-           style="background-color: #E74C3C; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-           Tablero de Control SDDI
-        </a>
-    </div>
-    """
-    st.markdown(html_enlace, unsafe_allow_html=True)
+    st.markdown("<br><br><h2 style='text-align: center; color: #2C3E50;'>Tablero en Mantenimiento</h2>", unsafe_allow_html=True)
 
-# ==============================================================================
-# FOOTER
-# ==============================================================================
-st.markdown("""
-<div style='text-align: center; margin-top: 50px; padding-top: 20px; border-top: 1px solid #E0E6ED; color: #95A5A6; font-size: 13px; font-family: sans-serif;'>
-    <b>Diseñado y Desarrollado: Equipo de Gestión SDDI / tyantas-myps</b> &nbsp;|&nbsp; 
-    <span style="color: #95A5A6;">(Información de Trámite Transparente)</span>
-</div>
-""", unsafe_allow_html=True)
+st.markdown("<div style='text-align: center; margin-top: 50px; padding-top: 20px; border-top: 1px solid #E0E6ED; color: #95A5A6; font-size: 13px;'><b>Equipo de Gestión SDDI</b></div>", unsafe_allow_html=True)
