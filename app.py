@@ -176,7 +176,8 @@ with tab_gestion:
 
         total_exp = len(df)
         tramite_activo = df[df["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False)].shape[0]
-        flujo_lento = df[df["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False)].shape[0]
+        # CORRECCIÓN: Filtro con negación para evitar duplicidad
+        flujo_lento = df[df["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False)].shape[0]
         paralizados = df[df["Trazabilidad"].astype(str).str.contains("año|6 meses", case=False, na=False)].shape[0]
 
         m1, m2, m3, m4 = st.columns(4)
@@ -212,7 +213,8 @@ with tab_gestion:
         mostrar_encabezado(f"Reporte Dinámico: {eq_sel}", "Evaluación detallada de estados y carga por especialista.", mostrar_volver=True)
 
         act = df_eq[df_eq["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False)].shape[0]
-        len_f = df_eq[df_eq["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False)].shape[0]
+        # CORRECCIÓN: Filtro con negación para evitar duplicidad
+        len_f = df_eq[df_eq["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df_eq["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False)].shape[0]
         par = df_eq[df_eq["Trazabilidad"].astype(str).str.contains("año|6 meses", case=False, na=False)].shape[0]
 
         k1, k2, k3, k4 = st.columns(4)
@@ -229,10 +231,16 @@ with tab_gestion:
             df_p = df_eq[df_eq["Profesional"] == prof]
             
             df_sddi = df_p[df_p["Tipo Doc"].astype(str).str.contains("generado", case=False, na=False)]
-            s_act, s_len, s_par = sum(df_sddi["Trazabilidad"].str.contains("semana", case=False, na=False)), sum(df_sddi["Trazabilidad"].str.contains("mes", case=False, na=False)), sum(df_sddi["Trazabilidad"].str.contains("año|6 meses", case=False, na=False))
+            # CORRECCIÓN: Variables separadas con filtro corregido
+            s_act = sum(df_sddi["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False))
+            s_len = sum(df_sddi["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df_sddi["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False))
+            s_par = sum(df_sddi["Trazabilidad"].astype(str).str.contains("año|6 meses", case=False, na=False))
             
             df_ext = df_p[df_p["Tipo Doc"].astype(str).str.contains("Externo", case=False, na=False)]
-            e_act, e_len, e_par = sum(df_ext["Trazabilidad"].str.contains("semana", case=False, na=False)), sum(df_ext["Trazabilidad"].str.contains("mes", case=False, na=False)), sum(df_ext["Trazabilidad"].str.contains("año|6 meses", case=False, na=False))
+            # CORRECCIÓN: Variables separadas con filtro corregido
+            e_act = sum(df_ext["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False))
+            e_len = sum(df_ext["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df_ext["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False))
+            e_par = sum(df_ext["Trazabilidad"].astype(str).str.contains("año|6 meses", case=False, na=False))
 
             with st.expander(f"👤 {prof} — Total: {len(df_p)} expedientes en trámite"):
                 if f"f_{prof}" not in st.session_state: st.session_state[f"f_{prof}"] = "Oculto"
@@ -263,10 +271,12 @@ with tab_gestion:
                     
                     df_m = df_p.copy()
                     if f_actual == "SA": df_m = df_sddi[df_sddi["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False)]
-                    elif f_actual == "SL": df_m = df_sddi[df_sddi["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False)]
+                    # CORRECCIÓN: Filtro también ajustado en el despliegue de las tablas individuales
+                    elif f_actual == "SL": df_m = df_sddi[df_sddi["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df_sddi["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False)]
                     elif f_actual == "SP": df_m = df_sddi[df_sddi["Trazabilidad"].astype(str).str.contains("año|6 meses", case=False, na=False)]
                     elif f_actual == "EA": df_m = df_ext[df_ext["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False)]
-                    elif f_actual == "EL": df_m = df_ext[df_ext["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False)]
+                    # CORRECCIÓN: Filtro también ajustado en el despliegue de las tablas individuales
+                    elif f_actual == "EL": df_m = df_ext[df_ext["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df_ext["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False)]
                     elif f_actual == "EP": df_m = df_ext[df_ext["Trazabilidad"].astype(str).str.contains("año|6 meses", case=False, na=False)]
                     
                     if len(df_m) > 0:
