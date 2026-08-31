@@ -163,19 +163,19 @@ def clasificar_estados_sunarp(df_base, usuarios):
             mask_conocidos = estados.str.contains("INSCRITO|CALIFICACIÓN|CALIFICACION|TACHADO|OBSERVADO|LIQUIDADO|REINGRESADO|EN PROCESO", case=False, na=False)
             otros = int((~mask_conocidos & (estados != "NAN") & (estados != "")).sum())
             
-            # Mapeo de paleta de colores según requerimientos (UI)
+            # Mapeo de paleta de colores
             metricas.append({
                 "Usuario": usu, 
                 "Total": total,
                 "Tarjetas": {
-                    "Inscritos": {"valor": insc, "bg": "#28B463", "color": "#FFFFFF"},        # Verde
-                    "En Calificación": {"valor": calif, "bg": "#3498DB", "color": "#FFFFFF"}, # Azul
-                    "Tachados": {"valor": tach, "bg": "#8D6E63", "color": "#FFFFFF"},         # Marrón
-                    "Observados": {"valor": obs, "bg": "#E74C3C", "color": "#FFFFFF"},        # Rojo
-                    "Liquidados": {"valor": liq, "bg": "#196F3D", "color": "#FFFFFF"},        # Verde Oscuro
-                    "Reingresados": {"valor": reing, "bg": "#85C1E9", "color": "#2C3E50"},    # Celeste (texto oscuro para contraste)
-                    "En Proceso": {"valor": en_proc, "bg": "#E5E7E9", "color": "#2C3E50"},    # Gris Claro (texto oscuro)
-                    "Otros": {"valor": otros, "bg": "#95A5A6", "color": "#FFFFFF"}            # Plomo
+                    "Inscritos": {"valor": insc, "bg": "#28B463", "color": "#FFFFFF"},
+                    "En Calificación": {"valor": calif, "bg": "#3498DB", "color": "#FFFFFF"},
+                    "Tachados": {"valor": tach, "bg": "#8D6E63", "color": "#FFFFFF"},
+                    "Observados": {"valor": obs, "bg": "#E74C3C", "color": "#FFFFFF"},
+                    "Liquidados": {"valor": liq, "bg": "#196F3D", "color": "#FFFFFF"},
+                    "Reingresados": {"valor": reing, "bg": "#85C1E9", "color": "#2C3E50"},
+                    "En Proceso": {"valor": en_proc, "bg": "#E5E7E9", "color": "#2C3E50"},
+                    "Otros": {"valor": otros, "bg": "#95A5A6", "color": "#FFFFFF"}
                 }
             })
     except Exception as e:
@@ -185,28 +185,30 @@ def clasificar_estados_sunarp(df_base, usuarios):
 
 def generar_tarjeta_html(etiqueta, config):
     """
-    Renderizador UI: Genera código HTML/CSS aislado.
-    Reduce la tipografía de métrica a 24px (~30% menos que el default de Streamlit).
+    Renderizador UI Optimizado: 
+    - Altura reducida a 45px (50% más pequeño).
+    - Tipografía ajustada (Título: 9px, Valor: 20px) para ocupar eficientemente el espacio sin vacíos.
+    - Alineación compacta en flexbox.
     """
     if config["valor"] == 0:
-        return "" # Omisión defensiva para no renderizar tarjetas vacías
+        return "" # Omisión defensiva
         
     return f"""
-    <div style="background-color: {config['bg']}; padding: 8px 10px; border-radius: 6px; 
-                text-align: center; margin-bottom: 10px; box-shadow: 0 3px 6px rgba(0,0,0,0.1); 
-                height: 80px; display: flex; flex-direction: column; justify-content: center;">
-        <div style="color: {config['color']}; font-size: 11px; font-weight: 700; 
-                    text-transform: uppercase; letter-spacing: 0.5px; line-height: 1.2; margin-bottom: 4px;">
+    <div style="background-color: {config['bg']}; padding: 4px 6px; border-radius: 4px; 
+                text-align: center; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.15); 
+                height: 45px; display: flex; flex-direction: column; justify-content: center; align-items: center;">
+        <div style="color: {config['color']}; font-size: 9px; font-weight: 800; 
+                    text-transform: uppercase; letter-spacing: 0.2px; line-height: 1; margin-bottom: 2px;">
             {etiqueta}
         </div>
-        <div style="color: {config['color']}; font-size: 24px; font-weight: 900; line-height: 1;">
+        <div style="color: {config['color']}; font-size: 20px; font-weight: 900; line-height: 1;">
             {config['valor']}
         </div>
     </div>
     """
 
 # ==============================================================================
-# CREACIÓN DE PESTAÑAS (TABS) TIPO EXCEL
+# CREACIÓN DE PESTAÑAS (TABS)
 # ==============================================================================
 tab_gestion, tab_produccion = st.tabs(["📁 Gestión de Expedientes", "📊 Avance de Producción"])
 
@@ -218,7 +220,7 @@ with tab_gestion:
         with st.spinner("Conectando con la base de datos..."):
             df = cargar_datos()
     except Exception as e:
-        st.error("Error al conectar con la base de datos de Gestión. Asegúrate de colocar un enlace CSV válido en 'url_sheet'.")
+        st.error("Error al conectar con la base de datos de Gestión.")
         st.stop()
 
     if st.session_state.capa_actual == 1:
@@ -359,7 +361,7 @@ with tab_gestion:
                         st.info("No hay expedientes en esta categoría.")
         
         # ==============================================================================
-        # SEGUIMIENTO TÍTULOS SUNARP (UI REFACTORIZADA - SIN TABLAS DOM)
+        # SEGUIMIENTO TÍTULOS SUNARP (UI COMPACTA OPTIMIZADA)
         # ==============================================================================
         st.markdown("<hr style='border:none; border-top:1px solid #E0E6ED; margin:40px 0 20px 0;'><h4 style='color:#2C3E50;'>🏢 Seguimiento Títulos SUNARP</h4>", unsafe_allow_html=True)
         
@@ -380,12 +382,12 @@ with tab_gestion:
                 
                 with st.expander(f"👤 {usu} — Total: {data['Total']} títulos asignados", expanded=False):
                     
-                    # Filtro defensivo: Extraemos solo las métricas que tienen expedientes activos (>0)
+                    # Filtramos las métricas que tienen > 0 expedientes activos
                     estados_activos = {k: v for k, v in data["Tarjetas"].items() if v["valor"] > 0}
                     
                     if estados_activos:
-                        # Generación dinámica de grilla UI basada en el número de tarjetas activas
-                        columnas_tarjetas = st.columns(min(len(estados_activos), 6))
+                        # Ampliamos a 7 u 8 columnas dinámicamente para que las tarjetas pequeñas entren en una sola línea
+                        columnas_tarjetas = st.columns(min(len(estados_activos), 8))
                         
                         for idx, (etiqueta, config) in enumerate(estados_activos.items()):
                             columna_actual = columnas_tarjetas[idx % len(columnas_tarjetas)]
@@ -393,8 +395,6 @@ with tab_gestion:
                                 st.markdown(generar_tarjeta_html(etiqueta, config), unsafe_allow_html=True)
                     else:
                         st.info("No existen estados procesados para las asignaciones actuales.")
-                    
-                    # NOTA: st.dataframe ha sido eliminado por completo para optimizar el DOM.
         else:
             st.warning("No se detectaron registros en el flujo de SUNARP.")
 
