@@ -24,12 +24,7 @@ def ir_a_capa(nivel, equipo=None):
 # MOTOR RPA: SINCRONIZACIÓN DE GOOGLE SHEETS (ETL)
 # ==============================================================================
 def sincronizar_estados_sunarp(usuario_codigo):
-    """
-    Patrón ETL para cruzar bases de datos en memoria y escribir en bloque.
-    Manejo de errores defensivo para API limits y credenciales faltantes.
-    """
     try:
-        # 1. AUTENTICACIÓN DEFENSIVA
         if "gcp_service_account" not in st.secrets:
             st.error("⚠️ Falta configurar el JSON de Google Service Account en st.secrets.")
             return False
@@ -38,20 +33,16 @@ def sincronizar_estados_sunarp(usuario_codigo):
         creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scopes)
         client = gspread.authorize(creds)
 
-        # 2. EXTRACTOR: HOJA ORIGEN (Hoja de Búsqueda SUNARP)
         ID_ORIGEN = "1t9PJU_kMebrqURJuNTZRnTaQESpWoE3hsh77dw0GgcY"
         wb_origen = client.open_by_key(ID_ORIGEN)
-        ws_origen = wb_origen.get_worksheet(0) # Captura la primera hoja (Hoja 2 / seguimiento)
+        ws_origen = wb_origen.get_worksheet(0)
         datos_origen = ws_origen.get_all_values()
 
-        # 3. TRANSFORMADOR: CREACIÓN DE DICCIONARIO HASH EN MEMORIA
-        # Columna C = index 2 (Número Título), Columna D = index 3 (Estado)
         diccionario_estados = {}
         for fila in datos_origen[1:]: 
             if len(fila) > 3 and fila[2].strip():
                 diccionario_estados[fila[2].strip()] = fila[3].strip()
 
-        # 4. CARGADOR: ACTUALIZACIÓN HOJA DESTINO (Expedientes SBN)
         ID_DESTINO = "1U_M04niREqrrb88xODw6BflbIH4HTODzXZKjkwzAWfg"
         wb_destino = client.open_by_key(ID_DESTINO)
 
@@ -60,7 +51,7 @@ def sincronizar_estados_sunarp(usuario_codigo):
             "KPAJUELO": ["KATHERINE"],
             "VGAMARRA": ["VICTOR"],
             "RJIMENEZ": ["RICARDO"],
-            "VESPADIN": ["VALERIA", "VALERIA-SDDI"] # Valida si la pestaña en tu excel no tiene espacios extra
+            "VESPADIN": ["VALERIA", "VALERIA-SDDI"]
         }
 
         pestañas_a_procesar = mapeo_pestañas.get(usuario_codigo, [])
@@ -79,10 +70,9 @@ def sincronizar_estados_sunarp(usuario_codigo):
                         columna_m_actualizada.append(["REVISADO" if len(fila) <= 12 else fila[12]])
                         continue
                     
-                    # Pad defensivo: Asegura que la fila tenga al menos 13 elementos (hasta Col M)
                     fila_segura = fila + [""] * (13 - len(fila))
-                    n_titulo = fila_segura[9].strip() # Columna J (Index 9)
-                    estado_actual = fila_segura[12].strip() # Columna M (Index 12)
+                    n_titulo = fila_segura[9].strip()
+                    estado_actual = fila_segura[12].strip()
 
                     if n_titulo in diccionario_estados:
                         nuevo_estado = diccionario_estados[n_titulo]
@@ -93,7 +83,6 @@ def sincronizar_estados_sunarp(usuario_codigo):
                     columna_m_actualizada.append([estado_actual])
 
                 if hubo_modificacion_en_pestaña:
-                    # Escritura en bloque (Bulk Write) para evitar cuelgues por Rate Limit
                     rango_escritura = f"M1:M{len(columna_m_actualizada)}"
                     ws_destino.update(values=columna_m_actualizada, range_name=rango_escritura)
                     cambios_realizados = True
@@ -184,7 +173,7 @@ def crear_tarjeta(titulo, valor, color_borde):
     """, unsafe_allow_html=True)
 
 # ==============================================================================
-# CARGA DE DATOS PÚBLICOS (LECTURA RÁPIDA)
+# CARGA DE DATOS PÚBLICOS
 # ==============================================================================
 @st.cache_data(ttl=300, show_spinner=False)
 def cargar_datos():
@@ -290,7 +279,7 @@ with tab_gestion:
         with m1: crear_tarjeta("📁 Total en Trámite", len(df), "#3498DB")
         with m2: crear_tarjeta("🟢 Trámite Activo", df[df["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False)].shape[0], "#2ECC71")
         with m3: crear_tarjeta("🟡 Flujo Lento", df[df["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False)].shape[0], "#F1C40F")
-        with m4: crear_tarjeta("🚨 Paralizados", df[df["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)].shape[0], "#E74C3C")
+        with m4: crear_tarjeta("🔴 Paralizados", df[df["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)].shape[0], "#E74C3C")
 
         st.markdown("<hr style='border:none; border-top:1px solid #E0E6ED; margin:20px 0;'>", unsafe_allow_html=True)
         st.markdown("<h4 style='color:#2C3E50; text-align:center;'>Carga General por Equipos de Trabajo</h4><br>", unsafe_allow_html=True)
@@ -329,36 +318,45 @@ with tab_gestion:
 
         for prof in profesionales:
             df_p = df_eq[df_eq["Profesional"] == prof]
+            
             df_sddi = df_p[df_p["Tipo Doc"].astype(str).str.contains("generado", case=False, na=False)]
+            s_act = sum(df_sddi["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False))
+            s_len = sum(df_sddi["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df_sddi["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False))
+            s_par = sum(df_sddi["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False))
+            
             df_ext = df_p[df_p["Tipo Doc"].astype(str).str.contains("Externo", case=False, na=False)]
+            e_act = sum(df_ext["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False))
+            e_len = sum(df_ext["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df_ext["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False))
+            e_par = sum(df_ext["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False))
 
             with st.expander(f"👤 {prof} — Total: {len(df_p)} expedientes en trámite"):
                 if f"f_{prof}" not in st.session_state: st.session_state[f"f_{prof}"] = "Oculto"
 
                 col_lbl1, c1, c2, c3 = st.columns([3, 1, 1, 1])
-                with col_lbl1: st.markdown(f"<div style='margin-top:5px; font-size:13px; color:#2C3E50;'>📄 <b>Generado SDDI</b></div>", unsafe_allow_html=True)
+                with col_lbl1: st.markdown(f"<div style='margin-top:5px; font-size:13px; color:#2C3E50;'>📄 <b>Generado SDDI</b> ({len(df_sddi)})</div>", unsafe_allow_html=True)
                 with c1: 
-                    if st.button("🟢", key=f"sa_{prof}", use_container_width=True): st.session_state[f"f_{prof}"] = "SA"
+                    if st.button(f"🟢 {s_act}", key=f"sa_{prof}", use_container_width=True): st.session_state[f"f_{prof}"] = "SA"
                 with c2: 
-                    if st.button("🟡", key=f"sl_{prof}", use_container_width=True): st.session_state[f"f_{prof}"] = "SL"
+                    if st.button(f"🟡 {s_len}", key=f"sl_{prof}", use_container_width=True): st.session_state[f"f_{prof}"] = "SL"
                 with c3: 
-                    if st.button("🔴", key=f"sp_{prof}", use_container_width=True): st.session_state[f"f_{prof}"] = "SP"
+                    if st.button(f"🔴 {s_par}", key=f"sp_{prof}", use_container_width=True): st.session_state[f"f_{prof}"] = "SP"
 
                 col_lbl2, c4, c5, c6 = st.columns([3, 1, 1, 1])
-                with col_lbl2: st.markdown(f"<div style='margin-top:5px; font-size:13px; color:#2C3E50;'>📥 <b>Externo Recibido</b></div>", unsafe_allow_html=True)
+                with col_lbl2: st.markdown(f"<div style='margin-top:5px; font-size:13px; color:#2C3E50;'>📥 <b>Externo Recibido</b> ({len(df_ext)})</div>", unsafe_allow_html=True)
                 with c4: 
-                    if st.button("🟢", key=f"ea_{prof}", use_container_width=True): st.session_state[f"f_{prof}"] = "EA"
+                    if st.button(f"🟢 {e_act}", key=f"ea_{prof}", use_container_width=True): st.session_state[f"f_{prof}"] = "EA"
                 with c5: 
-                    if st.button("🟡", key=f"el_{prof}", use_container_width=True): st.session_state[f"f_{prof}"] = "EL"
+                    if st.button(f"🟡 {e_len}", key=f"el_{prof}", use_container_width=True): st.session_state[f"f_{prof}"] = "EL"
                 with c6: 
-                    if st.button("🔴", key=f"ep_{prof}", use_container_width=True): st.session_state[f"f_{prof}"] = "EP"
+                    if st.button(f"🔴 {e_par}", key=f"ep_{prof}", use_container_width=True): st.session_state[f"f_{prof}"] = "EP"
 
                 f_actual = st.session_state[f"f_{prof}"]
                 
                 if f_actual != "Oculto":
                     st.markdown("<hr style='margin: 15px 0; border-top: 1px dashed #E0E6ED;'>", unsafe_allow_html=True)
+                    st.info("💡 **Aviso:** Para que el botón automatice la búsqueda necesitas la extensión del bot en tu navegador.", icon="⚙️")
+                    
                     df_m = df_p.copy()
-                    # Lógica de filtrado simplificada
                     if f_actual == "SA": df_m = df_sddi[df_sddi["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False)]
                     elif f_actual == "SL": df_m = df_sddi[df_sddi["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df_sddi["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False)]
                     elif f_actual == "SP": df_m = df_sddi[df_sddi["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)]
@@ -367,59 +365,82 @@ with tab_gestion:
                     elif f_actual == "EP": df_m = df_ext[df_ext["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)]
                     
                     if len(df_m) > 0:
+                        if "Trazabilidad" in df_m.columns: df_m = df_m.sort_values(by="Trazabilidad", ascending=False)
                         df_m["URL_Tramite"] = "https://tramitetransparente.sbn.gob.pe/#auto=" + df_m["expediente"].astype(str)
+                        cols_mostrar = ["expediente", "Tipo Doc", "Trazabilidad", "URL_Tramite"]
+                        existentes = [c for c in cols_mostrar if c in df_m.columns]
+                        
                         col_t, col_d = st.columns([5, 1.2])
                         with col_d:
-                            if st.button("❌ Cerrar", key=f"c_{prof}", use_container_width=True):
+                            buffer = io.BytesIO()
+                            with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                                columnas_exportar = [col for col in df_m.columns if col != "URL_Tramite"]
+                                df_m[columnas_exportar].to_excel(writer, index=False, sheet_name='Expedientes')
+                            
+                            st.download_button(
+                                label="📥 Bajar Excel",
+                                data=buffer.getvalue(),
+                                file_name=f"Reporte_{prof}_{f_actual}.xlsx",
+                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                use_container_width=True
+                            )
+                            st.markdown("<div style='margin-bottom: 5px;'></div>", unsafe_allow_html=True)
+                            if st.button("❌ Cerrar lista", key=f"c_{prof}", use_container_width=True):
                                 st.session_state[f"f_{prof}"] = "Oculto"
                                 st.rerun()
-                        with col_t:
-                            st.dataframe(df_m[["expediente", "Tipo Doc", "Trazabilidad", "URL_Tramite"]], use_container_width=True, hide_index=True)
-                    else:
-                        st.info("No hay expedientes.")
-        
-        # ==============================================================================
-        # SEGUIMIENTO TÍTULOS SUNARP (CON MOTOR RPA DE ACTUALIZACIÓN)
-        # ==============================================================================
-        st.markdown("<hr style='border:none; border-top:1px solid #E0E6ED; margin:40px 0 20px 0;'><h4 style='color:#2C3E50;'>🏢 Seguimiento Títulos SUNARP</h4>", unsafe_allow_html=True)
-        
-        try:
-            with st.spinner("Sincronizando base de datos registral..."):
-                df_sunarp = cargar_datos_sunarp()
-        except Exception as e:
-            st.error("Error crítico: Fallo de conexión.")
-            df_sunarp = pd.DataFrame()
 
-        if not df_sunarp.empty:
-            usuarios_sunarp = ["VESPADIN", "VGAMARRA", "MCHAVEZ", "RJIMENEZ", "KPAJUELO"]
-            datos_procesados = clasificar_estados_sunarp(df_sunarp, usuarios_sunarp)
-            
-            for data in datos_procesados:
-                usu = data["Usuario"]
-                
-                with st.expander(f"👤 {usu} — Total: {data['Total']} títulos asignados", expanded=False):
-                    estados_activos = {k: v for k, v in data["Tarjetas"].items() if v["valor"] > 0}
-                    
-                    if estados_activos:
-                        columnas_tarjetas = st.columns(12)
-                        idx_col = 0
-                        for etiqueta, config in estados_activos.items():
-                            with columnas_tarjetas[idx_col % 12]:
-                                st.markdown(generar_tarjeta_html(etiqueta, config), unsafe_allow_html=True)
-                            idx_col += 1
-                        
-                        # INYECCIÓN DEL BOTÓN RPA AL FINAL DEL CAJÓN
-                        st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
-                        _, col_btn = st.columns([10, 2])
-                        with col_btn:
-                            if st.button("Actualizar Estado", key=f"btn_rpa_{usu}", type="secondary", use_container_width=True):
-                                with st.spinner("Conectando con Google Sheets y transfiriendo datos..."):
-                                    exito = sincronizar_estados_sunarp(usu)
-                                    if exito:
-                                        st.success("Carga Exitosa")
-                                        st.rerun() # Refresca para mostrar la data nueva
+                        with col_t:
+                            st.dataframe(
+                                df_m[existentes], 
+                                use_container_width=True, 
+                                hide_index=True,
+                                column_config={"URL_Tramite": st.column_config.LinkColumn("🔗 Acción", display_text="Abrir Trámite")}
+                            )
                     else:
-                        st.info("No existen estados procesados.")
+                        st.info("No hay expedientes en esta categoría.")
+        
+        # ==============================================================================
+        # SEGUIMIENTO TÍTULOS SUNARP (RESTRINGIDO EXCLUSIVAMENTE AL EQUIPO TRANSVERSAL)
+        # ==============================================================================
+        if eq_sel == "Transversal":
+            st.markdown("<hr style='border:none; border-top:1px solid #E0E6ED; margin:40px 0 20px 0;'><h4 style='color:#2C3E50;'>🏢 Seguimiento Títulos SUNARP</h4>", unsafe_allow_html=True)
+            
+            try:
+                with st.spinner("Sincronizando base de datos registral..."):
+                    df_sunarp = cargar_datos_sunarp()
+            except Exception as e:
+                st.error("Error crítico: Fallo de conexión.")
+                df_sunarp = pd.DataFrame()
+
+            if not df_sunarp.empty:
+                usuarios_sunarp = ["VESPADIN", "VGAMARRA", "MCHAVEZ", "RJIMENEZ", "KPAJUELO"]
+                datos_procesados = clasificar_estados_sunarp(df_sunarp, usuarios_sunarp)
+                
+                for data in datos_procesados:
+                    usu = data["Usuario"]
+                    
+                    with st.expander(f"👤 {usu} — Total: {data['Total']} títulos asignados", expanded=False):
+                        estados_activos = {k: v for k, v in data["Tarjetas"].items() if v["valor"] > 0}
+                        
+                        if estados_activos:
+                            columnas_tarjetas = st.columns(12)
+                            idx_col = 0
+                            for etiqueta, config in estados_activos.items():
+                                with columnas_tarjetas[idx_col % 12]:
+                                    st.markdown(generar_tarjeta_html(etiqueta, config), unsafe_allow_html=True)
+                                idx_col += 1
+                            
+                            st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
+                            _, col_btn = st.columns([10, 2])
+                            with col_btn:
+                                if st.button("Actualizar Estado", key=f"btn_rpa_{usu}", type="secondary", use_container_width=True):
+                                    with st.spinner("Conectando con Google Sheets y transfiriendo datos..."):
+                                        exito = sincronizar_estados_sunarp(usu)
+                                        if exito:
+                                            st.success("Carga Exitosa")
+                                            st.rerun()
+                        else:
+                            st.info("No existen estados procesados.")
 
 with tab_produccion:
     st.markdown("<br><br><h2 style='text-align: center; color: #2C3E50;'>Tablero en Mantenimiento</h2>", unsafe_allow_html=True)
