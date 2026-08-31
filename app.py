@@ -157,7 +157,7 @@ def cargar_datos():
 
 @st.cache_data(ttl=300, show_spinner=False)
 def cargar_datos_sunarp():
-    url_sunarp = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTFQiw1QtTommjO3HEMCOmQEQHYuyoluv9KOUP9u6GJDntCAjzOnk77RD_Plx8MoPgktulWknPjloxd/pub?gid=0&single=true&output=csv"
+    url_sunarp = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTFQiw1QtTommj03HEMC0mQEQHYuyoluv9K0UP9u6GJDntCAjzOnk77RD_Plx8MoPgktulWknPjIoxd/pub?gid=0&single=true&output=csv"
     df_s = pd.read_csv(url_sunarp)
     # Estandarizar nombres de columnas por seguridad
     df_s.columns = df_s.columns.str.strip().str.upper()
