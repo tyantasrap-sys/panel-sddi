@@ -129,12 +129,11 @@ def cargar_datos_sunarp():
     return df_s
 
 # ==============================================================================
-# MÓDULOS DE TRANSFORMACIÓN Y CARGA UI (NUEVA ARQUITECTURA SUNARP)
+# MÓDULOS DE TRANSFORMACIÓN Y CARGA UI (ARQUITECTURA FLEXBOX)
 # ==============================================================================
 def clasificar_estados_sunarp(df_base, usuarios):
     """
-    Transformador: Filtra, limpia y clasifica los estados registrales utilizando
-    Regex defensivo. Retorna diccionarios listos para inyección HTML.
+    Transformador: Limpia y clasifica estados registrales.
     """
     metricas = []
     try:
@@ -151,7 +150,6 @@ def clasificar_estados_sunarp(df_base, usuarios):
 
             estados = df_usu["ESTADO"].astype(str).str.upper().str.strip()
             
-            # Clasificación Regex y Conteo
             insc = int(estados.str.contains("INSCRITO", case=False, na=False).sum())
             calif = int(estados.str.contains("CALIFICACIÓN|CALIFICACION", case=False, na=False).sum())
             tach = int(estados.str.contains("TACHADO", case=False, na=False).sum())
@@ -163,7 +161,6 @@ def clasificar_estados_sunarp(df_base, usuarios):
             mask_conocidos = estados.str.contains("INSCRITO|CALIFICACIÓN|CALIFICACION|TACHADO|OBSERVADO|LIQUIDADO|REINGRESADO|EN PROCESO", case=False, na=False)
             otros = int((~mask_conocidos & (estados != "NAN") & (estados != "")).sum())
             
-            # Mapeo de paleta de colores
             metricas.append({
                 "Usuario": usu, 
                 "Total": total,
@@ -185,18 +182,18 @@ def clasificar_estados_sunarp(df_base, usuarios):
 
 def generar_tarjeta_html(etiqueta, config):
     """
-    Renderizador UI Optimizado: 
-    - Altura reducida a 45px (50% más pequeño).
-    - Tipografía ajustada (Título: 9px, Valor: 20px) para ocupar eficientemente el espacio sin vacíos.
-    - Alineación compacta en flexbox.
+    Genera el HTML interno de la tarjeta. 
+    Nota: Ya no definimos márgenes externos (margin-bottom), esto lo controlará el contenedor Flexbox.
+    Ancho fijo de 115px para evitar estiramientos no deseados.
     """
     if config["valor"] == 0:
-        return "" # Omisión defensiva
+        return ""
         
     return f"""
     <div style="background-color: {config['bg']}; padding: 4px 6px; border-radius: 4px; 
-                text-align: center; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.15); 
-                height: 45px; display: flex; flex-direction: column; justify-content: center; align-items: center;">
+                text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.15); 
+                height: 45px; width: 115px; flex-shrink: 0; display: flex; flex-direction: column; 
+                justify-content: center; align-items: center;">
         <div style="color: {config['color']}; font-size: 9px; font-weight: 800; 
                     text-transform: uppercase; letter-spacing: 0.2px; line-height: 1; margin-bottom: 2px;">
             {etiqueta}
@@ -361,7 +358,7 @@ with tab_gestion:
                         st.info("No hay expedientes en esta categoría.")
         
         # ==============================================================================
-        # SEGUIMIENTO TÍTULOS SUNARP (UI COMPACTA OPTIMIZADA)
+        # SEGUIMIENTO TÍTULOS SUNARP (ARQUITECTURA DE RENDERIZADO FLEXBOX)
         # ==============================================================================
         st.markdown("<hr style='border:none; border-top:1px solid #E0E6ED; margin:40px 0 20px 0;'><h4 style='color:#2C3E50;'>🏢 Seguimiento Títulos SUNARP</h4>", unsafe_allow_html=True)
         
@@ -382,17 +379,23 @@ with tab_gestion:
                 
                 with st.expander(f"👤 {usu} — Total: {data['Total']} títulos asignados", expanded=False):
                     
-                    # Filtramos las métricas que tienen > 0 expedientes activos
+                    # Extraer solo las configuraciones que tienen al menos 1 expediente
                     estados_activos = {k: v for k, v in data["Tarjetas"].items() if v["valor"] > 0}
                     
                     if estados_activos:
-                        # Ampliamos a 7 u 8 columnas dinámicamente para que las tarjetas pequeñas entren en una sola línea
-                        columnas_tarjetas = st.columns(min(len(estados_activos), 8))
+                        # Reemplazamos st.columns por un contenedor CSS Flexbox (display: flex)
+                        # Esto asegura que los cuadros respeten su ancho de 115px sin deformarse.
+                        html_tarjetas = ""
+                        for etiqueta, config in estados_activos.items():
+                            html_tarjetas += generar_tarjeta_html(etiqueta, config)
                         
-                        for idx, (etiqueta, config) in enumerate(estados_activos.items()):
-                            columna_actual = columnas_tarjetas[idx % len(columnas_tarjetas)]
-                            with columna_actual:
-                                st.markdown(generar_tarjeta_html(etiqueta, config), unsafe_allow_html=True)
+                        contenedor_flexbox = f"""
+                        <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 5px 0;">
+                            {html_tarjetas}
+                        </div>
+                        """
+                        # Un solo llamado al DOM por usuario (Mejora radical de rendimiento)
+                        st.markdown(contenedor_flexbox, unsafe_allow_html=True)
                     else:
                         st.info("No existen estados procesados para las asignaciones actuales.")
         else:
