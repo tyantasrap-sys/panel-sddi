@@ -179,10 +179,7 @@ def clasificar_estados_sunarp(df_base, usuarios):
     return metricas
 
 def generar_tarjeta_html(etiqueta, config):
-    """
-    Renderizador UI Optimizado y Seguro.
-    Altura 45px. Se delega el control del Ancho a las columnas de Streamlit.
-    """
+    """Renderizador UI Optimizado. Se confía el Width al divisor de columnas 12x."""
     if config["valor"] == 0:
         return ""
         
@@ -354,7 +351,7 @@ with tab_gestion:
                         st.info("No hay expedientes en esta categoría.")
         
         # ==============================================================================
-        # SEGUIMIENTO TÍTULOS SUNARP (ARQUITECTURA DE RENDERIZADO ESTABLE)
+        # SEGUIMIENTO TÍTULOS SUNARP (GRILLA 12x COMPACTA Y SEGURA)
         # ==============================================================================
         st.markdown("<hr style='border:none; border-top:1px solid #E0E6ED; margin:40px 0 20px 0;'><h4 style='color:#2C3E50;'>🏢 Seguimiento Títulos SUNARP</h4>", unsafe_allow_html=True)
         
@@ -378,15 +375,15 @@ with tab_gestion:
                     estados_activos = {k: v for k, v in data["Tarjetas"].items() if v["valor"] > 0}
                     
                     if estados_activos:
-                        # RESTAURACIÓN A MÉTODO SEGURO: 
-                        # Forzamos una grilla rígida de 8 columnas. Al haber 8 columnas, Streamlit
-                        # limita automáticamente el ancho máximo de cada tarjeta, logrando ese 20%
-                        # de espacio deseado de manera nativa sin corromper el Markdown.
-                        columnas_tarjetas = st.columns(8)
+                        # RESTAURACIÓN A MÉTODO SEGURO CON DIVISOR 12:
+                        # Al dividir el contenedor en 12 columnas (en lugar de 8), cada tarjeta recibe
+                        # exactamente un 8.33% del ancho, logrando la reducción del ~35% solicitada
+                        # sin romper el parseador de Markdown de Streamlit.
+                        columnas_tarjetas = st.columns(12)
                         
                         idx_col = 0
                         for etiqueta, config in estados_activos.items():
-                            with columnas_tarjetas[idx_col % 8]:
+                            with columnas_tarjetas[idx_col % 12]:
                                 st.markdown(generar_tarjeta_html(etiqueta, config), unsafe_allow_html=True)
                             idx_col += 1
                     else:
