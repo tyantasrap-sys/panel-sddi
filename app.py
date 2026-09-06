@@ -14,6 +14,36 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 st.set_page_config(page_title="Trazabilidad SDDI", layout="wide", page_icon="🏛️", initial_sidebar_state="collapsed")
 
+# ==============================================================================
+# SISTEMA DE SEGURIDAD (LOGIN)
+# ==============================================================================
+if "autenticado" not in st.session_state:
+    st.session_state.autenticado = False
+
+if not st.session_state.autenticado:
+    st.markdown("<br><br><br>", unsafe_allow_html=True)
+    col1, col2, col3 = st.columns([1, 1.2, 1])
+    with col2:
+        st.markdown("""
+        <div style='background-color: #FFFFFF; padding: 40px; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.1); text-align: center; border-top: 5px solid #2980B9;'>
+            <h2 style='color: #2C3E50; margin-bottom: 5px;'>SBN | DGPE | SDDI</h2>
+            <p style='color: #7F8C8D; margin-bottom: 25px;'>Sistema de Auditoría de Trazabilidad</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        clave_ingresada = st.text_input("Clave de acceso restringido", type="password", placeholder="Ingrese la contraseña...")
+        
+        if st.button("Acceder al Sistema", use_container_width=True, type="primary"):
+            if clave_ingresada == "sddi26":
+                st.session_state.autenticado = True
+                st.rerun()
+            else:
+                st.error("❌ Credenciales incorrectas. Acceso denegado.")
+    st.stop() # Detiene la ejecución del resto del código si no hay autenticación
+
+# ==============================================================================
+# VARIABLES DE NAVEGACIÓN
+# ==============================================================================
 if 'capa_actual' not in st.session_state: st.session_state.capa_actual = 1
 if 'equipo_sel' not in st.session_state: st.session_state.equipo_sel = None
 
@@ -202,7 +232,7 @@ def mostrar_modal_detalle(tipo_clic, param1, param2, param3, df_base):
             
         col_btn, _ = st.columns([3, 7])
         with col_btn:
-            st.download_button("📥 Bajar Excel", data=buffer.getvalue(), file_name=f"Reporte_Auditoria_{tipo_clic}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+            st.download_button("📥 Bajar Excel", data=buffer.getvalue(), file_name=f"Reporte_Expedientes_{tipo_clic}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
             
         st.markdown("<div style='margin-bottom: 5px;'></div>", unsafe_allow_html=True)
         st.dataframe(df_mostrar, use_container_width=True, hide_index=True, column_config={"URL_Tramite": st.column_config.LinkColumn("🔗 Acción", display_text="Abrir Trámite")})
@@ -210,7 +240,7 @@ def mostrar_modal_detalle(tipo_clic, param1, param2, param3, df_base):
         st.error("No hay suficientes columnas en la base de datos para mostrar el detalle.")
 
 # ==============================================================================
-# ESTILOS CSS AVANZADOS Y UI
+# ESTILOS CSS AVANZADOS Y UI (CORRECCIÓN DE TEMBLOR Y SIMETRÍA)
 # ==============================================================================
 st.markdown("""
 <style>
@@ -242,21 +272,26 @@ h1 a svg, h2 a svg, h3 a svg { display: none !important; }
 .tarjeta-clic { cursor: pointer; transition: all 0.2s ease; }
 .tarjeta-clic:hover { transform: translateY(-3px); box-shadow: 0 6px 12px rgba(0,0,0,0.15) !important; z-index: 10; background-color: #FDFEFE !important; }
 
-.celda-equipo-clic { cursor: pointer; transition: all 0.2s ease; }
-.celda-equipo-clic:hover { background-color: #E8F4F8 !important; transform: scale(1.03); box-shadow: 0 4px 8px rgba(0,0,0,0.1); z-index: 10; position: relative; color: #2980B9; }
-
-.celda-proc-clic, .mod-proc, .mod-proc-eq { cursor: pointer !important; transition: all 0.2s ease; }
-.celda-proc-clic:hover, .mod-proc:hover, .mod-proc-eq:hover { background-color: #E8F4F8 !important; transform: scale(1.05); box-shadow: 0 4px 8px rgba(0,0,0,0.1); z-index: 10; position: relative; color: #2980B9; font-weight: 900; }
+/* REGLAS ESTRICTAS CONTRA EL SHAKING DE LAS TABLAS INTERACTIVAS */
+.celda-proc-clic, .mod-proc, .mod-proc-eq, .celda-equipo-clic, .mod-anio-gen, .mod-anio-eq, .mod-accion, .mod-accion-prof, .mod-anio-gen-eq, .mod-anio-prof { 
+    cursor: pointer !important; 
+    transition: background-color 0.2s ease, color 0.2s ease; 
+}
+.celda-proc-clic:hover, .mod-proc:hover, .mod-proc-eq:hover, .celda-equipo-clic:hover, .mod-anio-gen:hover, .mod-anio-eq:hover, .mod-accion:hover, .mod-accion-prof:hover, .mod-anio-gen-eq:hover, .mod-anio-prof:hover { 
+    background-color: #D6EAF8 !important; 
+    color: #1A5276 !important; 
+}
 
 .tarjeta-equipo { background-color: #FFFFFF; padding: 12px 10px; border-radius: 10px; border-top: 4px solid #2980B9; box-shadow: 0 3px 8px rgba(0,0,0,0.04); text-align: center; margin-bottom: 10px; height: 120px !important; display: flex; flex-direction: column; justify-content: center; }
 
-.tabla-matricial { width: 100%; min-width: 750px; border-collapse: collapse; font-family: 'Inter', sans-serif; }
-.tabla-matricial th { background-color: #2980B9; color: #FFFFFF; text-align: center; padding: 6px 8px; font-size: 11px; font-weight: 700; border: 1px solid #1A5276; text-transform: uppercase; line-height: 1.2; }
+/* TABLAS SIMÉTRICAS */
+.tabla-matricial { width: 100%; min-width: 750px; border-collapse: collapse; font-family: 'Inter', sans-serif; table-layout: fixed; }
+.tabla-matricial th { background-color: #2980B9; color: #FFFFFF; text-align: center; padding: 6px 8px; font-size: 11px; font-weight: 700; border: 1px solid #1A5276; text-transform: uppercase; line-height: 1.2; word-wrap: break-word; }
 .tabla-matricial th.header-secundario { background-color: #F8F9F9; color: #7F8C8D; border-bottom: 2px solid #BDC3C7; border-color: #E0E6ED; font-size: 12px; }
-.tabla-matricial th.col-fija { width: 20%; min-width: 180px; text-align: left; padding-left: 15px; white-space: nowrap; }
-.tabla-matricial td { background-color: #FFFFFF; color: #2C3E50; text-align: center; padding: 6px 10px; font-size: 13px; font-weight: 700; border: 1px solid #E0E6ED; }
+.tabla-matricial th.col-fija { width: 28%; min-width: 180px; text-align: left; padding-left: 15px; white-space: normal; }
+.tabla-matricial td { background-color: #FFFFFF; color: #2C3E50; text-align: center; padding: 6px 5px; font-size: 13px; font-weight: 700; border: 1px solid #E0E6ED; word-wrap: break-word; }
 .tabla-matricial td.col-equipo { background-color: #F4F6F7; text-align: left; padding-left: 15px; font-size: 13px; font-weight: 600; color: #2C3E50; border: 1px solid #E0E6ED; white-space: nowrap; }
-.tabla-matricial td.col-proc { background-color: #F4F6F7; text-align: left; padding: 8px 15px; font-size: 11px; font-weight: 600; color: #1A252F; border: 1px solid #E0E6ED; white-space: normal; min-width: 250px; line-height: 1.3; }
+.tabla-matricial td.col-proc { background-color: #F4F6F7; text-align: left; padding: 8px 15px; font-size: 11px; font-weight: 600; color: #1A252F; border: 1px solid #E0E6ED; white-space: normal; line-height: 1.3; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -542,7 +577,7 @@ with tab_gestion:
                     st.rerun()
 
     # ==============================================================================
-    # VISTA CAPA 2 (DETALLE DE EQUIPO - HOMOLOGADO Y SEGURO)
+    # VISTA CAPA 2 (DETALLE DE EQUIPO)
     # ==============================================================================
     elif st.session_state.capa_actual == 2:
         components.html("<script> setTimeout(function() { window.parent.scrollTo(0, 0); }, 150); </script>", height=0, width=0)
@@ -653,7 +688,7 @@ with tab_gestion:
                 for a in list_años_eq:
                     val_a = len(df_eq[df_eq['Año_Temp'] == a])
                     html_anio_proc_eq += f"<td class='mod-proc-eq' data-equipo='{eq_sel}' data-proc='TOTAL' data-anio='{a}'>{val_a}</td>"
-                html_anio_proc_eq += f"<td class='mod-proc-eq' data-equipo='{eq_sel}' data-proc='TOTAL' data-anio='TOTAL' style='background-color: #E8F4F8;'>{len(df_eq)}</td></tr>"
+                html_anio_proc_eq += f"<td class='mod-proc-eq' data-equipo='{eq_sel}' data-proc='TOTAL' data-anio='TOTAL' style='background-color: #E8F4F8; color: #2C3E50;'>{len(df_eq)}</td></tr>"
                 
                 html_anio_proc_eq += "</tbody></table></div>"
                 st.markdown(html_anio_proc_eq, unsafe_allow_html=True)
@@ -680,7 +715,7 @@ with tab_gestion:
                 for a in list_años_eq:
                     val_a = len(df_eq[df_eq['Año_Temp'] == a])
                     html_anio_p += f"<td class='celda-equipo-clic mod-anio-prof' data-equipo='{eq_sel}' data-prof='TOTAL' data-anio='{a}'>{val_a}</td>"
-                html_anio_p += f"<td class='celda-equipo-clic mod-anio-prof' data-equipo='{eq_sel}' data-prof='TOTAL' data-anio='TOTAL' style='background-color: #E8F4F8;'>{len(df_eq)}</td></tr>"
+                html_anio_p += f"<td class='celda-equipo-clic mod-anio-prof' data-equipo='{eq_sel}' data-prof='TOTAL' data-anio='TOTAL' style='background-color: #E8F4F8; color: #2C3E50;'>{len(df_eq)}</td></tr>"
 
                 html_anio_p += "</tbody></table></div>"
                 st.markdown(html_anio_p, unsafe_allow_html=True)
@@ -736,43 +771,19 @@ setTimeout(function() {
         }
     }
 
-    // DELEGACIÓN GLOBAL DE CLICS (Inmune a la destrucción de DOM por pestañas)
+    // DELEGACIÓN GLOBAL DE CLICS
     parentDOM.body.addEventListener('click', function(e) {
         const target = e.target.closest('td');
         if (!target) return;
 
-        // Capa 1: Última Acción
-        if (target.classList.contains('mod-accion')) {
-            triggerModal('ACCION', target.getAttribute('data-equipo'), target.getAttribute('data-tipo'), 'TOTAL');
-        }
-        // Capa 1: Año Resumen General
-        else if (target.classList.contains('mod-anio-gen')) {
-            triggerModal('ANIO_GEN', target.getAttribute('data-anio'), 'TOTAL', 'TOTAL');
-        }
-        // Capa 1: Por Procedimiento
-        else if (target.classList.contains('mod-proc')) {
-            triggerModal('PROC', target.getAttribute('data-proc'), target.getAttribute('data-anio'), 'TOTAL');
-        }
-        // Capa 1: Comparativo por Equipos (Años)
-        else if (target.classList.contains('mod-anio-eq')) {
-            triggerModal('ANIO_EQ', target.getAttribute('data-equipo'), target.getAttribute('data-anio'), 'TOTAL');
-        }
-        // Capa 2: Última Acción por Profesional
-        else if (target.classList.contains('mod-accion-prof')) {
-            triggerModal('ACCION_PROF', target.getAttribute('data-prof'), target.getAttribute('data-tipo'), target.getAttribute('data-equipo'));
-        }
-        // Capa 2: Resumen General por Año (Equipo)
-        else if (target.classList.contains('mod-anio-gen-eq')) {
-            triggerModal('ANIO_GEN_EQ', target.getAttribute('data-equipo'), target.getAttribute('data-anio'), 'TOTAL');
-        }
-        // Capa 2: Por Procedimiento (Equipo)
-        else if (target.classList.contains('mod-proc-eq')) {
-            triggerModal('PROC_EQ', target.getAttribute('data-proc'), target.getAttribute('data-anio'), target.getAttribute('data-equipo'));
-        }
-        // Capa 2: Por Profesional (Años)
-        else if (target.classList.contains('mod-anio-prof')) {
-            triggerModal('ANIO_PROF', target.getAttribute('data-prof'), target.getAttribute('data-anio'), target.getAttribute('data-equipo'));
-        }
+        if (target.classList.contains('mod-accion')) { triggerModal('ACCION', target.getAttribute('data-equipo'), target.getAttribute('data-tipo'), 'TOTAL'); }
+        else if (target.classList.contains('mod-anio-gen')) { triggerModal('ANIO_GEN', target.getAttribute('data-anio'), 'TOTAL', 'TOTAL'); }
+        else if (target.classList.contains('mod-proc')) { triggerModal('PROC', target.getAttribute('data-proc'), target.getAttribute('data-anio'), 'TOTAL'); }
+        else if (target.classList.contains('mod-anio-eq')) { triggerModal('ANIO_EQ', target.getAttribute('data-equipo'), target.getAttribute('data-anio'), 'TOTAL'); }
+        else if (target.classList.contains('mod-accion-prof')) { triggerModal('ACCION_PROF', target.getAttribute('data-prof'), target.getAttribute('data-tipo'), target.getAttribute('data-equipo')); }
+        else if (target.classList.contains('mod-anio-gen-eq')) { triggerModal('ANIO_GEN_EQ', target.getAttribute('data-equipo'), target.getAttribute('data-anio'), 'TOTAL'); }
+        else if (target.classList.contains('mod-proc-eq')) { triggerModal('PROC_EQ', target.getAttribute('data-proc'), target.getAttribute('data-anio'), target.getAttribute('data-equipo')); }
+        else if (target.classList.contains('mod-anio-prof')) { triggerModal('ANIO_PROF', target.getAttribute('data-prof'), target.getAttribute('data-anio'), target.getAttribute('data-equipo')); }
     });
 
     // CAMBIO DE PESTAÑAS (Métricas Superiores)
