@@ -283,26 +283,52 @@ with tab_gestion:
         with m3: crear_tarjeta("🟡 Flujo Lento (1 a 5 meses)", df[df["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False)].shape[0], "#F1C40F")
         with m4: crear_tarjeta("🔴 Paralizados (+6 meses)", df[df["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)].shape[0], "#E74C3C")
 
-        # BLOQUE 2: AÑO DE CREACIÓN (Extracción de Columna J)
+        # BLOQUE 2: AÑO DE CREACIÓN (Tabla Horizontal Estilizada)
         st.markdown("<hr style='border:none; border-top:1px dashed #E0E6ED; margin:25px 0 15px 0;'>", unsafe_allow_html=True)
         st.markdown("<h4 style='color:#2C3E50; margin-bottom:15px;'>📅 Expedientes por año de creación</h4>", unsafe_allow_html=True)
         
         if len(df.columns) >= 10:
             col_j = df.columns[9]
-            # Se aísla un número de 4 dígitos (19xx o 20xx) por si la celda incluye formato de fecha completa
             años = df[col_j].astype(str).str.extract(r'((?:19|20)\d{2})')[0].fillna("Sin Fecha")
-            conteo_años = años.value_counts().sort_index(ascending=False)
+            conteo_años = años.value_counts().sort_index(ascending=True)
             
-            # Se crea una cuadrícula dinámica asegurando simetría visual
-            columnas_años = st.columns(5)
-            for idx, (año, cantidad) in enumerate(conteo_años.items()):
-                with columnas_años[idx % 5]:
-                    crear_tarjeta(f"Año {año}", cantidad, "#95A5A6")
+            html_tabla = f"""
+            <div style="overflow-x: auto; margin: 0 auto 25px auto; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.04); border: 1px solid #BDC3C7; background-color: #FFFFFF;">
+                <table style="width: 100%; border-collapse: collapse; font-family: 'Inter', sans-serif;">
+                    <thead>
+                        <tr>
+                            <th colspan="{len(conteo_años)}" style="background-color: #2980B9; color: #FFFFFF; text-align: center; padding: 10px; font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;">
+                                Total Expedientes por Año
+                            </th>
+                        </tr>
+                        <tr>
+            """
+            
+            for año in conteo_años.index:
+                html_tabla += f"<th style='background-color: #F8F9F9; color: #7F8C8D; text-align: center; padding: 8px 15px; font-size: 13px; font-weight: 700; border: 1px solid #E0E6ED; border-bottom: 2px solid #BDC3C7;'>{año}</th>"
+                
+            html_tabla += """
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+            """
+            
+            for cantidad in conteo_años.values:
+                html_tabla += f"<td style='background-color: #FFFFFF; color: #2C3E50; text-align: center; padding: 12px 15px; font-size: 18px; font-weight: 900; border: 1px solid #E0E6ED;'>{cantidad}</td>"
+                
+            html_tabla += """
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            """
+            st.markdown(html_tabla, unsafe_allow_html=True)
         else:
             st.info("La columna J no está disponible en la base de datos actual para clasificar por años.")
 
         # BLOQUE 3: EQUIPOS DE TRABAJO
-        st.markdown("<hr style='border:none; border-top:1px solid #E0E6ED; margin:25px 0 20px 0;'>", unsafe_allow_html=True)
+        st.markdown("<hr style='border:none; border-top:1px solid #E0E6ED; margin:15px 0 20px 0;'>", unsafe_allow_html=True)
         st.markdown("<h4 style='color:#2C3E50; text-align:center;'>Carga General por Equipos de Trabajo</h4><br>", unsafe_allow_html=True)
 
         equipos = sorted(df["Equipo"].dropna().astype(str).unique().tolist())
