@@ -48,11 +48,8 @@ def sincronizar_estados_sunarp(usuario_codigo):
         wb_destino = client.open_by_key(ID_DESTINO)
 
         mapeo_pestañas = {
-            "MCHAVEZ": ["CAROLINA"],
-            "KPAJUELO": ["KATHERINE"],
-            "VGAMARRA": ["VICTOR"],
-            "RJIMENEZ": ["RICARDO"],
-            "VESPADIN": ["VALERIA", "VALERIA-SDDI"]
+            "MCHAVEZ": ["CAROLINA"], "KPAJUELO": ["KATHERINE"], "VGAMARRA": ["VICTOR"],
+            "RJIMENEZ": ["RICARDO"], "VESPADIN": ["VALERIA", "VALERIA-SDDI"]
         }
 
         pestañas_a_procesar = mapeo_pestañas.get(usuario_codigo, [])
@@ -87,7 +84,6 @@ def sincronizar_estados_sunarp(usuario_codigo):
                     rango_escritura = f"M1:M{len(columna_m_actualizada)}"
                     ws_destino.update(values=columna_m_actualizada, range_name=rango_escritura)
                     cambios_realizados = True
-                    logging.info(f"RPA: Pestaña '{nombre_pestaña}' sincronizada correctamente.")
 
             except gspread.exceptions.WorksheetNotFound:
                 continue
@@ -97,13 +93,13 @@ def sincronizar_estados_sunarp(usuario_codigo):
         return False
 
 # ==============================================================================
-# FUNCIÓN DE VENTANA EMERGENTE (MODAL MAESTRO MULTI-TABLA)
+# FUNCIÓN DE VENTANA EMERGENTE (MODAL MAESTRO MULTI-TABLA E INTELIGENTE)
 # ==============================================================================
-@st.dialog("📄 Detalle de Expedientes Solicitados", width="large")
+@st.dialog("📄 Auditoría de Expedientes Solicitados", width="large")
 def mostrar_modal_detalle(tipo_clic, param1, param2, df_base):
     df_modal = df_base.copy()
     
-    # 1. Enrutador del Filtro (Dependiendo de qué tabla se clickeó)
+    # 1. ENRUTAMIENTO DEL FILTRO SEGÚN ORIGEN DEL CLIC
     if tipo_clic == "PROC":
         st.markdown(f"<h5 style='color:#2980B9; margin-top:0;'>Procedimiento: {param1} | Año: {param2}</h5>", unsafe_allow_html=True)
         if param1 != 'TOTAL': df_modal = df_modal[df_modal.iloc[:, 10].astype(str).str.strip().str.upper() == param1.upper()]
@@ -138,46 +134,73 @@ def mostrar_modal_detalle(tipo_clic, param1, param2, df_base):
         if param2 != 'TOTAL': df_modal = df_modal[df_modal.iloc[:, 9].astype(str).str.extract(r'((?:19|20)\d{2})')[0] == str(param2)]
     
     if len(df_base.columns) >= 13:
-        # 2. Extracción de Columnas Exactas
+        # 2. CONSTRUCCIÓN DE LA TABLA MATRIZ EXACTA
         df_final = pd.DataFrame()
-        df_final["Expediente"] = df_modal.iloc[:, 0]               # Columna A
-        df_final["Profesional"] = df_modal.iloc[:, 7]              # Columna H
-        df_final["Año"] = df_modal.iloc[:, 9].astype(str).str.extract(r'((?:19|20)\d{2})')[0].fillna("S/F") # Columna J
-        df_final["Procedimiento"] = df_modal.iloc[:, 10]           # Columna K
-        df_final["Administrado"] = df_modal.iloc[:, 11]            # Columna L
-        df_final["Estado"] = df_modal.iloc[:, 12]                  # Columna M
-        df_final["Fecha_Ultima_Accion"] = df_modal.iloc[:, 3]      # Columna D
+        df_final["Expediente"] = df_modal.iloc[:, 0]
+        df_final["Profesional"] = df_modal.iloc[:, 7]
+        df_final["Año"] = df_modal.iloc[:, 9].astype(str).str.extract(r'((?:19|20)\d{2})')[0].fillna("S/F")
+        df_final["Procedimiento"] = df_modal.iloc[:, 10]
+        df_final["Administrado"] = df_modal.iloc[:, 11]
+        df_final["Estado"] = df_modal.iloc[:, 12]
+        
+        # Extracciones técnicas necesarias
+        df_final["Tipo Doc / Origen"] = df_modal.iloc[:, 5]        # Columna F (Generado/Recibido)
+        df_final["Fecha_Ultima_Accion"] = df_modal.iloc[:, 3]      # Columna D (Fecha exacta)
+        df_final["Trazabilidad_Oculta"] = df_modal["Trazabilidad"] if "Trazabilidad" in df_modal.columns else df_modal.iloc[:, 5]
         
         # 3. REGLA DE ANONIMIZACIÓN (Protección de Datos Personales)
         mask_compraventa = df_final["Procedimiento"].astype(str).str.upper().str.contains("COMPRAVENTA")
         palabras_entidad = "MUNICIPALIDAD|GOBIERNO|MINISTERIO|S\.A\.|S\.A\.C\.|S\.R\.L\.|E\.I\.R\.L\.|ASOCIACION|EMPRESA|COMUNIDAD|CONSORCIO|DIRECCION|SUPERINTENDENCIA|UNIVERSIDAD|COOPERATIVA|SINDICATO|PROYECTO|IGLESIA|COMITE|JUNTA"
         mask_juridica = df_final["Administrado"].astype(str).str.upper().str.contains(palabras_entidad, na=False)
-        
         mask_ocultar = mask_compraventa & ~mask_juridica
         df_final.loc[mask_ocultar, "Administrado"] = "PERSONA NATURAL"
         
-        # 4. CÁLCULO MATEMÁTICO: DÍAS CALENDARIO (Desde Columna D)
-        hoy = pd.Timestamp.today().normalize()
-        
-        def calcular_dias(fecha_str):
-            if pd.isna(fecha_str) or str(fecha_str).strip() in ["-", ""]:
-                return "-"
-            try:
-                # Intenta convertir el texto DD/MM/YYYY a formato de Fecha
-                fecha = pd.to_datetime(str(fecha_str).strip(), format='%d/%m/%Y', errors='coerce')
-                if pd.isna(fecha):
+        # 4. CONSTRUCCIÓN DE LA URL DE TRÁMITE TRANSPARENTE
+        df_final["URL_Tramite"] = "https://tramitetransparente.sbn.gob.pe/#auto=" + df_final["Expediente"].astype(str)
+
+        # 5. LÓGICA DE VISUALIZACIÓN DINÁMICA DE COLUMNAS (DIAS CALENDARIO VS ALERTA VISUAL)
+        if tipo_clic in ["ACCION", "ACCION_PROF"]:
+            hoy = pd.Timestamp.today().normalize()
+            def calcular_dias(fecha_str):
+                if pd.isna(fecha_str) or str(fecha_str).strip() in ["-", ""]: return "-"
+                try:
+                    fecha = pd.to_datetime(str(fecha_str).strip(), format='%d/%m/%Y', errors='coerce')
+                    if pd.isna(fecha): return "-"
+                    return f"{max(0, (hoy - fecha).days)} días"
+                except:
                     return "-"
-                dias = (hoy - fecha).days
-                return f"{max(0, dias)} días"
-            except:
-                return "-"
-                
-        df_final["Días Calendario"] = df_final["Fecha_Ultima_Accion"].apply(calcular_dias)
+            df_final["Días Calendario"] = df_final["Fecha_Ultima_Accion"].apply(calcular_dias)
+            cols_mostrar = ["Expediente", "Profesional", "Año", "Procedimiento", "Administrado", "Estado", "Tipo Doc / Origen", "Días Calendario", "URL_Tramite"]
+        else:
+            def calcular_alerta(val):
+                v = str(val).lower()
+                if "semana" in v: return "🟢 Trámite Activo"
+                elif "año" in v or "6 meses" in v or "no se encontro resultado" in v: return "🔴 Paralizado"
+                elif "mes" in v: return "🟡 Flujo Lento"
+                return "⚪ Sin Datos"
+            df_final["Alerta Visual"] = df_final["Trazabilidad_Oculta"].apply(calcular_alerta)
+            cols_mostrar = ["Expediente", "Profesional", "Año", "Procedimiento", "Administrado", "Estado", "Alerta Visual", "URL_Tramite"]
         
-        # Ocultamos la columna técnica de fecha y mostramos el resultado
-        df_mostrar = df_final[["Expediente", "Profesional", "Año", "Procedimiento", "Administrado", "Estado", "Días Calendario"]]
+        df_mostrar = df_final[cols_mostrar]
         
-        st.dataframe(df_mostrar, use_container_width=True, hide_index=True)
+        # 6. MÓDULO DE DESCARGA EXCEL E INTERFAZ
+        buffer = io.BytesIO()
+        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+            columnas_exportar = [col for col in df_mostrar.columns if col != "URL_Tramite"]
+            df_mostrar[columnas_exportar].to_excel(writer, index=False, sheet_name='Detalle_Expedientes')
+            
+        col_btn, _ = st.columns([3, 7])
+        with col_btn:
+            st.download_button(
+                label="📥 Bajar Excel",
+                data=buffer.getvalue(),
+                file_name=f"Reporte_Auditoria_{tipo_clic}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
+            
+        st.markdown("<div style='margin-bottom: 5px;'></div>", unsafe_allow_html=True)
+        st.dataframe(df_mostrar, use_container_width=True, hide_index=True, column_config={"URL_Tramite": st.column_config.LinkColumn("🔗 Acción", display_text="Abrir Trámite")})
     else:
         st.error("No hay suficientes columnas en la base de datos para mostrar el detalle.")
 
@@ -190,8 +213,8 @@ st.markdown("""
 html, body, [class*="css"], .stApp { font-family: 'Inter', sans-serif !important; background-color: #F4F7F6 !important; }
 .block-container { padding-top: 2rem !important; padding-bottom: 2rem !important; }
 
-/* OCULTAMOS DE FORMA RADICAL EL TEXT_INPUT TÉCNICO DEL MODAL */
-div[data-testid="stTextInput"] { display: none !important; visibility: hidden !important; height: 0 !important; overflow: hidden !important; }
+/* OCULTAMOS DE FORMA RADICAL EL TEXT_INPUT TÉCNICO DEL MODAL EN TODAS LAS VERSIONES */
+div[data-testid="stTextInput"] { display: none !important; visibility: hidden !important; height: 0 !important; overflow: hidden !important; margin: 0 !important; padding: 0 !important; }
 
 button[kind="primary"] { background-color: #2980B9 !important; border-color: #2980B9 !important; color: white !important; font-weight: 700 !important; }
 button[kind="primary"]:hover { background-color: #1A5276 !important; border-color: #1A5276 !important; }
@@ -213,7 +236,7 @@ a[href*="github.com"], a[href*="streamlit.io"] { pointer-events: none !important
 .tarjeta-titulo { color: #7F8C8D; font-size: 10px; margin: 0; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; min-height: 18px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px; line-height: 1.1; pointer-events: none; }
 .tarjeta-valor { color: #2C3E50; font-size: 24px; margin: 0 !important; font-weight: 700; line-height: 1; pointer-events: none; }
 
-/* CLASES INTERACTIVAS MEJORADAS PARA ACTIVAR MODALES EN TODAS LAS TABLAS */
+/* CLASES INTERACTIVAS MEJORADAS */
 .tarjeta-clic { cursor: pointer; transition: all 0.2s ease; }
 .tarjeta-clic:hover { transform: translateY(-3px); box-shadow: 0 6px 12px rgba(0,0,0,0.15) !important; z-index: 10; background-color: #FDFEFE !important; }
 
@@ -285,9 +308,6 @@ def crear_tarjeta(titulo, valor, color_borde, id_click=""):
     </div>
     """, unsafe_allow_html=True)
 
-# ==============================================================================
-# CARGA DE DATOS PÚBLICOS
-# ==============================================================================
 @st.cache_data(ttl=300, show_spinner=False)
 def cargar_datos():
     url_sheet = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT1sNYxj6znXHjwEGFZH58FXR1CUGUuw6Ro7dz2Y65byi6nkGP9s5f88FbUze-QT550MeucdeSpOIWm/pub?gid=0&single=true&output=csv" 
@@ -344,7 +364,7 @@ def clasificar_estados_sunarp(df_base, usuarios):
                 }
             })
     except Exception as e:
-        logging.error(f"Fallo en la transformación de datos SUNARP: {str(e)}")
+        pass
     return metricas
 
 def generar_tarjeta_html(etiqueta, config):
@@ -364,7 +384,7 @@ def generar_tarjeta_html(etiqueta, config):
     """
 
 # ==============================================================================
-# PESTAÑAS Y FLUJO PRINCIPAL
+# FLUJO PRINCIPAL
 # ==============================================================================
 tab_gestion, tab_produccion = st.tabs(["📁 Gestión de Expedientes", "📊 Avance de Producción"])
 
@@ -376,7 +396,6 @@ with tab_gestion:
         st.error("Error al conectar con la base de datos de Gestión.")
         st.stop()
         
-    # EL INPUT DEL MODAL ESTÁ AHORA TOTALMENTE INVISIBLE GRACIAS AL CSS GLOBAL
     modal_trigger = st.text_input("modal_trigger", key="modal_trigger_input", label_visibility="hidden")
     
     if 'last_trigger' not in st.session_state: 
@@ -393,9 +412,9 @@ with tab_gestion:
     if st.session_state.capa_actual == 1:
         mostrar_encabezado("Gestión de Expedientes SDDI", "Gestión y seguimiento de expedientes en trámite a nivel nacional.", mostrar_volver=False)
 
-        # ==============================================================================
-        # BLOQUE 1: ÚLTIMA ACCIÓN REALIZADA (CAPA 1)
-        # ==============================================================================
+        # ------------------------------------------------------------------------------
+        # BLOQUE 1: ÚLTIMA ACCIÓN REALIZADA 
+        # ------------------------------------------------------------------------------
         st.markdown("<h4 style='color:#2C3E50; margin-bottom:5px;'>📌 Expedientes por última acción realizada</h4>", unsafe_allow_html=True)
         tab_acc_gen, tab_acc_eq = st.tabs(["📊 Resumen General", "🏢 Comparativo por Equipos"])
         
@@ -439,10 +458,9 @@ with tab_gestion:
             html_acc += "</tbody></table></div>"
             st.markdown(html_acc, unsafe_allow_html=True)
 
-
-        # ==============================================================================
-        # BLOQUE 2: AÑO DE CREACIÓN Y PROCEDIMIENTOS (CAPA 1)
-        # ==============================================================================
+        # ------------------------------------------------------------------------------
+        # BLOQUE 2: AÑO DE CREACIÓN Y PROCEDIMIENTOS 
+        # ------------------------------------------------------------------------------
         st.markdown("<hr style='border:none; border-top:1px dashed #E0E6ED; margin:25px 0 15px 0;'>", unsafe_allow_html=True)
         st.markdown("<h4 style='color:#2C3E50; margin-bottom:5px;'>📅 Expedientes por año de creación</h4>", unsafe_allow_html=True)
         
@@ -470,8 +488,6 @@ with tab_gestion:
                 for año in conteo_años.index:
                     html_tabla += f"<th class='header-secundario'>{año}</th>"
                 html_tabla += "</tr></thead><tbody><tr>"
-                
-                # CELDAS INTERACTIVAS DEL RESUMEN GENERAL
                 for cantidad, año in zip(conteo_años.values, conteo_años.index):
                     html_tabla += f"<td class='celda-equipo-clic celda-anio-gen-modal' data-anio='{año}'>{cantidad}</td>"
                 html_tabla += "</tr></tbody></table></div>"
@@ -500,15 +516,10 @@ with tab_gestion:
                     for a in list_años:
                         val = conteo_pr.get(a, 0)
                         txt = str(val) if val > 0 else "-"
-                        if val > 0:
-                            html_anio_proc += f"<td class='celda-proc-clic' data-proc='{proc}' data-anio='{a}'>{txt}</td>"
-                        else:
-                            html_anio_proc += f"<td>{txt}</td>"
+                        if val > 0: html_anio_proc += f"<td class='celda-proc-clic' data-proc='{proc}' data-anio='{a}'>{txt}</td>"
+                        else: html_anio_proc += f"<td>{txt}</td>"
                             
-                    if len(df_pr) > 0:
-                        html_anio_proc += f"<td class='celda-proc-clic' data-proc='{proc}' data-anio='TOTAL' style='font-weight:900;'>{len(df_pr)}</td></tr>"
-                    else:
-                        html_anio_proc += f"<td style='font-weight:900;'>{len(df_pr)}</td></tr>"
+                    html_anio_proc += f"<td class='celda-proc-clic' data-proc='{proc}' data-anio='TOTAL' style='font-weight:900;'>{len(df_pr)}</td></tr>"
                 
                 html_anio_proc += "</tbody></table></div>"
                 st.markdown(html_anio_proc, unsafe_allow_html=True)
@@ -530,27 +541,20 @@ with tab_gestion:
                 for eq in equipos_lista:
                     df_e = df[df["Equipo"] == eq]
                     conteo_e = df_e['Año_Temp'].value_counts()
-                    
-                    # CELDAS INTERACTIVAS DEL COMPARATIVO POR EQUIPOS
                     html_anio_eq += f"<tr><td class='col-equipo celda-equipo-clic celda-anio-modal' data-equipo='{eq}' data-anio='TOTAL'>{eq}</td>"
                     for a in list_años:
                         val = conteo_e.get(a, 0)
                         txt = str(val) if val > 0 else "-"
-                        if val > 0:
-                            html_anio_eq += f"<td class='celda-equipo-clic celda-anio-modal' data-equipo='{eq}' data-anio='{a}'>{txt}</td>"
-                        else:
-                            html_anio_eq += f"<td>{txt}</td>"
+                        if val > 0: html_anio_eq += f"<td class='celda-equipo-clic celda-anio-modal' data-equipo='{eq}' data-anio='{a}'>{txt}</td>"
+                        else: html_anio_eq += f"<td>{txt}</td>"
                     html_anio_eq += f"<td class='celda-equipo-clic celda-anio-modal' data-equipo='{eq}' data-anio='TOTAL' style='font-weight:900;'>{len(df_e)}</td></tr>"
                 
                 html_anio_eq += "</tbody></table></div>"
                 st.markdown(html_anio_eq, unsafe_allow_html=True)
-                
-        else:
-            st.info("Faltan columnas en la base de datos para mostrar la información por Año y Procedimiento.")
 
-        # ==============================================================================
-        # BLOQUE 3: EQUIPOS DE TRABAJO (BOTONES DE VER REPORTE SE MANTIENEN)
-        # ==============================================================================
+        # ------------------------------------------------------------------------------
+        # BLOQUE 3: EQUIPOS DE TRABAJO (NAVEGACIÓN A CAPA 2 - VISTA PROFESIONALES)
+        # ------------------------------------------------------------------------------
         st.markdown("<hr style='border:none; border-top:1px solid #E0E6ED; margin:15px 0 20px 0;'>", unsafe_allow_html=True)
         st.markdown("<h4 style='color:#2C3E50; text-align:center;'>Carga General por Equipos de Trabajo</h4><br>", unsafe_allow_html=True)
 
@@ -572,15 +576,11 @@ with tab_gestion:
                     st.rerun()
 
     # ==============================================================================
-    # VISTA CAPA 2 (DETALLE DE EQUIPO - MATRICES POR PROFESIONAL)
+    # VISTA CAPA 2 (DETALLE DE EQUIPO)
     # ==============================================================================
     elif st.session_state.capa_actual == 2:
         
-        components.html("""
-        <script>
-        setTimeout(function() { window.parent.scrollTo(0, 0); }, 150);
-        </script>
-        """, height=0, width=0)
+        components.html("<script> setTimeout(function() { window.parent.scrollTo(0, 0); }, 150); </script>", height=0, width=0)
         
         eq_sel = st.session_state.equipo_sel
         df_eq = df[df["Equipo"] == eq_sel].copy()
@@ -588,7 +588,7 @@ with tab_gestion:
         
         mostrar_encabezado(f"Reporte Dinámico: {eq_sel}", "Evaluación detallada de estados y carga por especialista.", mostrar_volver=True)
 
-        st.markdown("<h4 style='color:#2C3E50; margin-bottom:5px;'>📌 Expedientes por última acción realizada</h4>", unsafe_allow_html=True)
+        st.markdown("<div id='ancla-acciones'></div><h4 style='color:#2C3E50; margin-bottom:5px;'>📌 Expedientes por última acción realizada</h4>", unsafe_allow_html=True)
         t_acc_gen_prof, t_acc_prof = st.tabs(["📊 Resumen General", "👨‍💼 Por Profesional"])
         
         with t_acc_gen_prof:
@@ -631,8 +631,7 @@ with tab_gestion:
             html_acc_p += "</tbody></table></div>"
             st.markdown(html_acc_p, unsafe_allow_html=True)
 
-        st.markdown("<hr style='border:none; border-top:1px dashed #E0E6ED; margin:25px 0 15px 0;'>", unsafe_allow_html=True)
-        st.markdown("<h4 style='color:#2C3E50; margin-bottom:5px;'>📅 Expedientes por año de creación</h4>", unsafe_allow_html=True)
+        st.markdown("<hr style='border:none; border-top:1px dashed #E0E6ED; margin:25px 0 15px 0;'><div id='ancla-anios'></div><h4 style='color:#2C3E50; margin-bottom:5px;'>📅 Expedientes por año de creación</h4>", unsafe_allow_html=True)
         
         t_anio_gen_prof, t_anio_prof = st.tabs(["📊 Resumen General", "👨‍💼 Por Profesional"])
         
@@ -656,7 +655,6 @@ with tab_gestion:
                 for año in conteo_años_eq.index:
                     html_tabla_eq += f"<th class='header-secundario'>{año}</th>"
                 html_tabla_eq += "</tr></thead><tbody><tr>"
-                
                 for cantidad, año in zip(conteo_años_eq.values, conteo_años_eq.index):
                     html_tabla_eq += f"<td class='celda-equipo-clic celda-anio-prof-modal' data-prof='TOTAL' data-anio='{año}'>{cantidad}</td>"
                 html_tabla_eq += "</tr></tbody></table></div>"
@@ -683,110 +681,31 @@ with tab_gestion:
                     for a in list_años_eq:
                         val = conteo_pr.get(a, 0)
                         txt = str(val) if val > 0 else "-"
-                        if val > 0:
-                            html_anio_p += f"<td class='celda-equipo-clic celda-anio-prof-modal' data-prof='{prof}' data-anio='{a}'>{txt}</td>"
-                        else:
-                            html_anio_p += f"<td>{txt}</td>"
+                        if val > 0: html_anio_p += f"<td class='celda-equipo-clic celda-anio-prof-modal' data-prof='{prof}' data-anio='{a}'>{txt}</td>"
+                        else: html_anio_p += f"<td>{txt}</td>"
                     html_anio_p += f"<td class='celda-equipo-clic celda-anio-prof-modal' data-prof='{prof}' data-anio='TOTAL' style='font-weight:900;'>{len(df_pr)}</td></tr>"
                 
                 html_anio_p += "</tbody></table></div>"
                 st.markdown(html_anio_p, unsafe_allow_html=True)
 
-        st.markdown("<hr style='border:none; border-top:1px solid #E0E6ED; margin:20px 0;'><h4 style='color:#2C3E50;'>👨‍💼 Relación de Profesionales</h4>", unsafe_allow_html=True)
-        for prof in profesionales_lista:
-            df_p = df_eq[df_eq["Profesional"] == prof]
-            
-            df_sddi = df_p[df_p["Tipo Doc"].astype(str).str.contains("generado", case=False, na=False)]
-            s_act = sum(df_sddi["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False))
-            s_len = sum(df_sddi["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df_sddi["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False))
-            s_par = sum(df_sddi["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False))
-            
-            df_ext = df_p[df_p["Tipo Doc"].astype(str).str.contains("Externo", case=False, na=False)]
-            e_act = sum(df_ext["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False))
-            e_len = sum(df_ext["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df_ext["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False))
-            e_par = sum(df_ext["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False))
-
-            with st.expander(f"👤 {prof} — Total: {len(df_p)} expedientes en trámite"):
-                if f"f_{prof}" not in st.session_state: st.session_state[f"f_{prof}"] = "Oculto"
-
-                col_lbl1, c1, c2, c3 = st.columns([3, 1, 1, 1])
-                with col_lbl1: st.markdown(f"<div style='margin-top:5px; font-size:13px; color:#2C3E50;'>📄 <b>Generado SDDI</b> ({len(df_sddi)})</div>", unsafe_allow_html=True)
-                with c1: 
-                    if st.button(f"🟢 {s_act}", key=f"sa_{prof}", use_container_width=True): st.session_state[f"f_{prof}"] = "SA"
-                with c2: 
-                    if st.button(f"🟡 {s_len}", key=f"sl_{prof}", use_container_width=True): st.session_state[f"f_{prof}"] = "SL"
-                with c3: 
-                    if st.button(f"🔴 {s_par}", key=f"sp_{prof}", use_container_width=True): st.session_state[f"f_{prof}"] = "SP"
-
-                col_lbl2, c4, c5, c6 = st.columns([3, 1, 1, 1])
-                with col_lbl2: st.markdown(f"<div style='margin-top:5px; font-size:13px; color:#2C3E50;'>📥 <b>Externo Recibido</b> ({len(df_ext)})</div>", unsafe_allow_html=True)
-                with c4: 
-                    if st.button(f"🟢 {e_act}", key=f"ea_{prof}", use_container_width=True): st.session_state[f"f_{prof}"] = "EA"
-                with c5: 
-                    if st.button(f"🟡 {e_len}", key=f"el_{prof}", use_container_width=True): st.session_state[f"f_{prof}"] = "EL"
-                with c6: 
-                    if st.button(f"🔴 {e_par}", key=f"ep_{prof}", use_container_width=True): st.session_state[f"f_{prof}"] = "EP"
-
-                f_actual = st.session_state[f"f_{prof}"]
-                
-                if f_actual != "Oculto":
-                    st.markdown("<hr style='margin: 15px 0; border-top: 1px dashed #E0E6ED;'>", unsafe_allow_html=True)
-                    st.info("💡 **Aviso:** Para que el botón automatice la búsqueda necesitas la extensión del bot en tu navegador.", icon="⚙️")
-                    
-                    df_m = df_p.copy()
-                    if f_actual == "SA": df_m = df_sddi[df_sddi["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False)]
-                    elif f_actual == "SL": df_m = df_sddi[df_sddi["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df_sddi["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False)]
-                    elif f_actual == "SP": df_m = df_sddi[df_sddi["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)]
-                    elif f_actual == "EA": df_m = df_ext[df_ext["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False)]
-                    elif f_actual == "EL": df_m = df_ext[df_ext["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df_ext["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False)]
-                    elif f_actual == "EP": df_m = df_ext[df_ext["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)]
-                    
-                    if len(df_m) > 0:
-                        if "Trazabilidad" in df_m.columns: df_m = df_m.sort_values(by="Trazabilidad", ascending=False)
-                        df_m["URL_Tramite"] = "https://tramitetransparente.sbn.gob.pe/#auto=" + df_m["expediente"].astype(str)
-                        cols_mostrar = ["expediente", "Tipo Doc", "Trazabilidad", "URL_Tramite"]
-                        existentes = [c for c in cols_mostrar if c in df_m.columns]
-                        
-                        col_t, col_d = st.columns([5, 1.2])
-                        with col_d:
-                            buffer = io.BytesIO()
-                            with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-                                columnas_exportar = [col for col in df_m.columns if col != "URL_Tramite"]
-                                df_m[columnas_exportar].to_excel(writer, index=False, sheet_name='Expedientes')
-                            st.download_button("📥 Bajar Excel", data=buffer.getvalue(), file_name=f"Reporte_{prof}_{f_actual}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
-                            st.markdown("<div style='margin-bottom: 5px;'></div>", unsafe_allow_html=True)
-                            if st.button("❌ Cerrar lista", key=f"c_{prof}", use_container_width=True):
-                                st.session_state[f"f_{prof}"] = "Oculto"
-                                st.rerun()
-
-                        with col_t:
-                            st.dataframe(df_m[existentes], use_container_width=True, hide_index=True, column_config={"URL_Tramite": st.column_config.LinkColumn("🔗 Acción", display_text="Abrir Trámite")})
-                    else:
-                        st.info("No hay expedientes en esta categoría.")
-        
         # ------------------------------------------------------------------------------
-        # CAPA 2 - BLOQUE 4: SEGUIMIENTO TÍTULOS SUNARP (SOLO TRANSVERSAL)
+        # SEGUIMIENTO TÍTULOS SUNARP (TRANSVERSAL)
         # ------------------------------------------------------------------------------
         if eq_sel == "Transversal":
             st.markdown("<hr style='border:none; border-top:1px solid #E0E6ED; margin:40px 0 20px 0;'><h4 style='color:#2C3E50;'>🏢 Seguimiento Títulos SUNARP</h4>", unsafe_allow_html=True)
-            
             try:
                 with st.spinner("Sincronizando base de datos registral..."):
                     df_sunarp = cargar_datos_sunarp()
             except Exception as e:
-                st.error("Error crítico: Fallo de conexión.")
                 df_sunarp = pd.DataFrame()
 
             if not df_sunarp.empty:
                 usuarios_sunarp = ["VESPADIN", "VGAMARRA", "MCHAVEZ", "RJIMENEZ", "KPAJUELO"]
                 datos_procesados = clasificar_estados_sunarp(df_sunarp, usuarios_sunarp)
-                
                 for data in datos_procesados:
                     usu = data["Usuario"]
-                    
                     with st.expander(f"👤 {usu} — Total: {data['Total']} títulos asignados", expanded=False):
                         estados_activos = {k: v for k, v in data["Tarjetas"].items() if v["valor"] > 0}
-                        
                         if estados_activos:
                             columnas_tarjetas = st.columns(12)
                             idx_col = 0
@@ -794,28 +713,23 @@ with tab_gestion:
                                 with columnas_tarjetas[idx_col % 12]:
                                     st.markdown(generar_tarjeta_html(etiqueta, config), unsafe_allow_html=True)
                                 idx_col += 1
-                            
                             st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
                             _, col_btn = st.columns([10, 2])
                             with col_btn:
                                 if st.button("Actualizar Estado", key=f"btn_rpa_{usu}", type="secondary", use_container_width=True):
-                                    with st.spinner("Conectando con Google Sheets y transfiriendo datos..."):
-                                        exito = sincronizar_estados_sunarp(usu)
-                                        if exito:
+                                    with st.spinner("Conectando..."):
+                                        if sincronizar_estados_sunarp(usu):
                                             st.success("Carga Exitosa")
                                             st.rerun()
-                        else:
-                            st.info("No existen estados procesados.")
 
 # ==============================================================================
-# INYECCIÓN JAVASCRIPT GLOBAL PARA CLICS E INTERACTIVIDAD DE NAVEGACIÓN Y MODALES
+# INYECCIÓN JAVASCRIPT GLOBAL PARA ENRUTAMIENTO DIRECTO A VENTANAS EMERGENTES
 # ==============================================================================
 components.html("""
 <script>
 setTimeout(function() {
     const parentDOM = window.parent.document;
     
-    // Función Maestra para inyectar datos al backend y abrir Modales
     function triggerModal(type, p1, p2) {
         const inputs = parentDOM.querySelectorAll('input[aria-label="modal_trigger"]');
         if(inputs.length > 0) {
@@ -827,31 +741,14 @@ setTimeout(function() {
         }
     }
 
-    // 1. Enlace de Clics: CAPA 1 (Tablas de Última Acción)
-    parentDOM.querySelectorAll('.celda-accion-modal').forEach(el => {
-        el.onclick = function() { triggerModal('ACCION', el.getAttribute('data-equipo'), el.getAttribute('data-tipo')); };
-    });
+    parentDOM.querySelectorAll('.celda-accion-modal').forEach(el => { el.onclick = function() { triggerModal('ACCION', el.getAttribute('data-equipo'), el.getAttribute('data-tipo')); }; });
+    parentDOM.querySelectorAll('.celda-anio-gen-modal').forEach(el => { el.onclick = function() { triggerModal('ANIO_GEN', el.getAttribute('data-anio'), 'TOTAL'); }; });
+    parentDOM.querySelectorAll('.celda-proc-clic').forEach(el => { el.onclick = function() { triggerModal('PROC', el.getAttribute('data-proc'), el.getAttribute('data-anio')); }; });
+    parentDOM.querySelectorAll('.celda-anio-modal').forEach(el => { el.onclick = function() { triggerModal('ANIO_EQ', el.getAttribute('data-equipo'), el.getAttribute('data-anio')); }; });
 
-    // 2. Enlace de Clics: CAPA 1 (Tablas de Años de Creación - Resumen General, Por Proc, Por Equipos)
-    parentDOM.querySelectorAll('.celda-anio-gen-modal').forEach(el => {
-        el.onclick = function() { triggerModal('ANIO_GEN', el.getAttribute('data-anio'), 'TOTAL'); };
-    });
-    parentDOM.querySelectorAll('.celda-proc-clic').forEach(el => {
-        el.onclick = function() { triggerModal('PROC', el.getAttribute('data-proc'), el.getAttribute('data-anio')); };
-    });
-    parentDOM.querySelectorAll('.celda-anio-modal').forEach(el => {
-        el.onclick = function() { triggerModal('ANIO_EQ', el.getAttribute('data-equipo'), el.getAttribute('data-anio')); };
-    });
+    parentDOM.querySelectorAll('.celda-accion-prof-modal').forEach(el => { el.onclick = function() { triggerModal('ACCION_PROF', el.getAttribute('data-prof'), el.getAttribute('data-tipo')); }; });
+    parentDOM.querySelectorAll('.celda-anio-prof-modal').forEach(el => { el.onclick = function() { triggerModal('ANIO_PROF', el.getAttribute('data-prof'), el.getAttribute('data-anio')); }; });
 
-    // 3. Enlace de Clics: CAPA 2 (Tablas por Profesional)
-    parentDOM.querySelectorAll('.celda-accion-prof-modal').forEach(el => {
-        el.onclick = function() { triggerModal('ACCION_PROF', el.getAttribute('data-prof'), el.getAttribute('data-tipo')); };
-    });
-    parentDOM.querySelectorAll('.celda-anio-prof-modal').forEach(el => {
-        el.onclick = function() { triggerModal('ANIO_PROF', el.getAttribute('data-prof'), el.getAttribute('data-anio')); };
-    });
-
-    // 4. CAMBIO DE PESTAÑAS Y RUTAS (Métricas Superiores)
     parentDOM.querySelectorAll('.tarjeta-clic-acciones').forEach(el => {
         el.onclick = function() {
             const tabs = Array.from(parentDOM.querySelectorAll('[role="tab"]'));
@@ -880,14 +777,10 @@ setTimeout(function() {
             if(profTabs.length > 1) profTabs[1].click();
         };
     });
-
 }, 400);
 </script>
 """, height=0, width=0)
 
-# ==============================================================================
-# CONTENIDO DE LA PESTAÑA 2: AVANCE DE PRODUCCIÓN
-# ==============================================================================
 with tab_produccion:
     st.markdown("<br><br><h2 style='text-align: center; color: #2C3E50;'>Estamos trabajando para integrar esta información, por lo pronto ingrese a:</h2><br>", unsafe_allow_html=True)
     col_izq, col_centro, col_der = st.columns([3, 4, 3])
@@ -895,12 +788,4 @@ with tab_produccion:
         st.link_button("📊 Ir al Tablero de Control SDDI", "https://script.google.com/macros/s/AKfycbzNuA__KQObk_2JI8iuBxqFD5RyByc7jVHe7OudtrFrEnpIPBCc6D3SEZ0-BCofUYiJ/exec", type="primary", use_container_width=True)
     st.markdown("<br><br>", unsafe_allow_html=True)
 
-# ==============================================================================
-# FOOTER
-# ==============================================================================
-st.markdown("""
-<div style='text-align: center; margin-top: 50px; padding-top: 20px; border-top: 1px solid #E0E6ED; color: #95A5A6; font-size: 13px; font-family: sans-serif;'>
-    <b>Diseñado y Desarrollado: Equipo de Gestión SDDI / tyantas-myps</b> &nbsp;|&nbsp; 
-    <span style="color: #95A5A6;">(Información de Trámite Transparente)</span>
-</div>
-""", unsafe_allow_html=True)
+st.markdown("<div style='text-align: center; margin-top: 50px; padding-top: 20px; border-top: 1px solid #E0E6ED; color: #95A5A6; font-size: 13px;'><b>Diseñado y Desarrollado: Equipo de Gestión SDDI / tyantas-myps</b> &nbsp;|&nbsp; <span style='color: #95A5A6;'>(Información de Trámite Transparente)</span></div>", unsafe_allow_html=True)
