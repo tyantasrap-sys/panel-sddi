@@ -98,7 +98,7 @@ def sincronizar_estados_sunarp(usuario_codigo):
 # ==============================================================================
 # FUNCIÓN DE VENTANA EMERGENTE (MODAL MAESTRO BLINDADO)
 # ==============================================================================
-@st.dialog("📄 Auditoría de Expedientes Solicitados", width="large")
+@st.dialog("📄 Reporte de expedientes solicitados", width="large")
 def mostrar_modal_detalle(tipo_clic, param1, param2, param3, df_base):
     df_modal = df_base.copy()
     
@@ -245,8 +245,9 @@ h1 a svg, h2 a svg, h3 a svg { display: none !important; }
 .celda-equipo-clic { cursor: pointer; transition: all 0.2s ease; }
 .celda-equipo-clic:hover { background-color: #E8F4F8 !important; transform: scale(1.03); box-shadow: 0 4px 8px rgba(0,0,0,0.1); z-index: 10; position: relative; color: #2980B9; }
 
-.celda-proc-clic { cursor: pointer; transition: all 0.2s ease; }
-.celda-proc-clic:hover { background-color: #E8F4F8 !important; transform: scale(1.05); box-shadow: 0 4px 8px rgba(0,0,0,0.1); z-index: 10; position: relative; color: #2980B9; font-weight: 900; }
+/* CLASE MEJORADA PARA QUE LAS CELDAS DE PROCEDIMIENTO MUESTREN LA MANITO (POINTER) */
+.celda-proc-clic, .mod-proc, .mod-proc-eq { cursor: pointer !important; transition: all 0.2s ease; }
+.celda-proc-clic:hover, .mod-proc:hover, .mod-proc-eq:hover { background-color: #E8F4F8 !important; transform: scale(1.05); box-shadow: 0 4px 8px rgba(0,0,0,0.1); z-index: 10; position: relative; color: #2980B9; font-weight: 900; }
 
 .tarjeta-equipo { background-color: #FFFFFF; padding: 12px 10px; border-radius: 10px; border-top: 4px solid #2980B9; box-shadow: 0 3px 8px rgba(0,0,0,0.04); text-align: center; margin-bottom: 10px; height: 120px !important; display: flex; flex-direction: column; justify-content: center; }
 
