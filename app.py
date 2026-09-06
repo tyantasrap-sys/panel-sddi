@@ -100,6 +100,33 @@ def sincronizar_estados_sunarp(usuario_codigo):
         return False
 
 # ==============================================================================
+# FUNCIÓN DE VENTANA EMERGENTE (MODAL PARA PROCEDIMIENTOS)
+# ==============================================================================
+@st.dialog("📄 Detalle de Expedientes Solicitados", width="large")
+def mostrar_modal_detalle(proc, anio, df_base):
+    st.markdown(f"<h5 style='color:#2980B9; margin-top:0;'>Procedimiento: {proc} | Año: {anio}</h5>", unsafe_allow_html=True)
+    
+    if len(df_base.columns) >= 13:
+        # Extraemos exactamente las columnas: A(0), H(7), J(9), K(10), L(11), M(12)
+        df_modal = df_base.iloc[:, [0, 7, 9, 10, 11, 12]].copy()
+        df_modal.columns = ["Expediente", "Administrado", "Año", "Procedimiento", "Trazabilidad", "Estado"]
+        
+        # REGLA DE ANONIMIZACIÓN (Protección de Datos Personales)
+        # Si el procedimiento es una COMPRAVENTA, se blinda el nombre del administrado
+        mask_compraventa = df_modal["Procedimiento"].astype(str).str.upper().str.contains("COMPRAVENTA")
+        df_modal.loc[mask_compraventa, "Administrado"] = "PERSONA NATURAL"
+        
+        # Aplicamos los filtros del clic
+        if proc != 'TOTAL':
+            df_modal = df_modal[df_modal["Procedimiento"].astype(str).str.strip().str.upper() == proc.upper()]
+        if anio != 'TOTAL':
+            df_modal = df_modal[df_modal["Año"].astype(str) == str(anio)]
+        
+        st.dataframe(df_modal, use_container_width=True, hide_index=True)
+    else:
+        st.error("No hay suficientes columnas en la base de datos para mostrar el detalle.")
+
+# ==============================================================================
 # ESTILOS CSS AVANZADOS Y UI
 # ==============================================================================
 st.markdown("""
@@ -128,17 +155,20 @@ a[href*="github.com"], a[href*="streamlit.io"] { pointer-events: none !important
 .tarjeta-titulo { color: #7F8C8D; font-size: 10px; margin: 0; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; min-height: 18px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px; line-height: 1.1; pointer-events: none; }
 .tarjeta-valor { color: #2C3E50; font-size: 24px; margin: 0 !important; font-weight: 700; line-height: 1; pointer-events: none; }
 
-/* CLASES INTERACTIVAS PARA TARJETAS Y CELDAS DE TABLA */
+/* CLASES INTERACTIVAS */
 .tarjeta-clic { cursor: pointer; transition: all 0.2s ease; }
 .tarjeta-clic:hover { transform: translateY(-3px); box-shadow: 0 6px 12px rgba(0,0,0,0.15) !important; z-index: 10; background-color: #FDFEFE !important; }
 
 .celda-equipo-clic { cursor: pointer; transition: all 0.2s ease; }
-.celda-equipo-clic:hover { background-color: #E8F4F8 !important; transform: scale(1.03); box-shadow: 0 4px 8px rgba(0,0,0,0.1); z-index: 10; position: relative; }
+.celda-equipo-clic:hover { background-color: #E8F4F8 !important; transform: scale(1.03); box-shadow: 0 4px 8px rgba(0,0,0,0.1); z-index: 10; position: relative; color: #2980B9; }
+
+.celda-proc-clic { cursor: pointer; transition: all 0.2s ease; }
+.celda-proc-clic:hover { background-color: #E8F4F8 !important; transform: scale(1.05); box-shadow: 0 4px 8px rgba(0,0,0,0.1); z-index: 10; position: relative; color: #2980B9; font-weight: 900; }
 
 .tarjeta-equipo { background-color: #FFFFFF; padding: 12px 10px; border-radius: 10px; border-top: 4px solid #2980B9; box-shadow: 0 3px 8px rgba(0,0,0,0.04); text-align: center; margin-bottom: 10px; height: 120px !important; display: flex; flex-direction: column; justify-content: center; }
 div[data-testid="stExpander"] summary p { font-size: 14px !important; font-weight: 400 !important; color: #2C3E50 !important; }
 
-/* ESTILOS GLOBALES PARA TABLAS HTML MATRICIALES (COMPACTADAS Y PROPORCIONALES) */
+/* ESTILOS GLOBALES PARA TABLAS HTML MATRICIALES (AFINADOS) */
 .tabla-matricial { width: 100%; min-width: 750px; border-collapse: collapse; font-family: 'Inter', sans-serif; }
 .tabla-matricial th { background-color: #2980B9; color: #FFFFFF; text-align: center; padding: 6px 8px; font-size: 11px; font-weight: 700; border: 1px solid #1A5276; text-transform: uppercase; line-height: 1.2; }
 .tabla-matricial th.header-secundario { background-color: #F8F9F9; color: #7F8C8D; border-bottom: 2px solid #BDC3C7; border-color: #E0E6ED; font-size: 12px; }
@@ -297,6 +327,20 @@ with tab_gestion:
         st.error("Error al conectar con la base de datos de Gestión.")
         st.stop()
         
+    # INYECCIÓN DEL CAMPO OCULTO PARA EL MODAL DE PROCEDIMIENTOS
+    st.markdown("<div style='display:none; height:0; overflow:hidden;'>", unsafe_allow_html=True)
+    modal_trigger = st.text_input("modal_trigger", key="modal_trigger_input", label_visibility="hidden")
+    st.markdown("</div>", unsafe_allow_html=True)
+    
+    if 'last_trigger' not in st.session_state: 
+        st.session_state.last_trigger = ""
+        
+    if modal_trigger and modal_trigger != st.session_state.last_trigger:
+        st.session_state.last_trigger = modal_trigger
+        parts = modal_trigger.split("|||")
+        if len(parts) >= 2:
+            mostrar_modal_detalle(parts[0], parts[1], df)
+
     equipos_lista = sorted(df["Equipo"].dropna().astype(str).unique().tolist())
 
     if st.session_state.capa_actual == 1:
@@ -389,7 +433,7 @@ with tab_gestion:
                 list_años = df['Año_Temp'].value_counts().sort_index(ascending=True).index.tolist()
                 
                 # ORDENAMIENTO DINÁMICO: De mayor a menor cantidad total de expedientes
-                procedimientos_lista = df['Procedimiento_Temp'].value_counts().index.tolist()
+                procedimientos_ordenados = df['Procedimiento_Temp'].value_counts().index.tolist()
                 
                 html_anio_proc = """
                 <div style="overflow-x: auto; margin: 10px auto 20px auto; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.04); border: 1px solid #BDC3C7; background-color: #FFFFFF;">
@@ -402,15 +446,23 @@ with tab_gestion:
                     html_anio_proc += f"<th>{a}</th>"
                 html_anio_proc += "<th style='background-color: #1F618D;'>TOTAL</th></tr></thead><tbody>"
                 
-                for proc in procedimientos_lista:
+                for proc in procedimientos_ordenados:
                     df_pr = df[df['Procedimiento_Temp'] == proc]
                     conteo_pr = df_pr['Año_Temp'].value_counts()
                     html_anio_proc += f"<tr><td class='col-proc'>{proc}</td>"
+                    
                     for a in list_años:
                         val = conteo_pr.get(a, 0)
                         txt = str(val) if val > 0 else "-"
-                        html_anio_proc += f"<td>{txt}</td>"
-                    html_anio_proc += f"<td style='font-weight:900;'>{len(df_pr)}</td></tr>"
+                        if val > 0:
+                            html_anio_proc += f"<td class='celda-proc-clic' data-proc='{proc}' data-anio='{a}'>{txt}</td>"
+                        else:
+                            html_anio_proc += f"<td>{txt}</td>"
+                            
+                    if len(df_pr) > 0:
+                        html_anio_proc += f"<td class='celda-proc-clic' data-proc='{proc}' data-anio='TOTAL' style='font-weight:900;'>{len(df_pr)}</td></tr>"
+                    else:
+                        html_anio_proc += f"<td style='font-weight:900;'>{len(df_pr)}</td></tr>"
                 
                 html_anio_proc += "</tbody></table></div>"
                 st.markdown(html_anio_proc, unsafe_allow_html=True)
@@ -730,7 +782,7 @@ with tab_gestion:
                             st.info("No existen estados procesados.")
 
 # ==============================================================================
-# INYECCIÓN JAVASCRIPT GLOBAL PARA CLICS E INTERACTIVIDAD DE NAVEGACIÓN
+# INYECCIÓN JAVASCRIPT GLOBAL PARA CLICS E INTERACTIVIDAD DE NAVEGACIÓN Y MODALES
 # ==============================================================================
 components.html("""
 <script>
@@ -849,6 +901,27 @@ setTimeout(function() {
             const tabs = Array.from(parentDOM.querySelectorAll('[role="tab"]'));
             const profTabs = tabs.filter(t => t.textContent.includes('Por Profesional'));
             if(profTabs.length > 1) profTabs[1].click();
+        };
+    });
+
+    // -----------------------------------------------------------
+    // 4. CLICS EN LA TABLA DE PROCEDIMIENTOS -> ABRIR MODAL
+    // -----------------------------------------------------------
+    const celdasProc = parentDOM.querySelectorAll('.celda-proc-clic');
+    celdasProc.forEach(el => {
+        el.onclick = function() {
+            const proc = el.getAttribute('data-proc');
+            const anio = el.getAttribute('data-anio');
+            
+            const inputs = parentDOM.querySelectorAll('input[aria-label="modal_trigger"]');
+            if(inputs.length > 0) {
+                const input = inputs[0];
+                const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+                // Agregamos Date.now() para que Streamlit detecte el cambio de variable siempre
+                nativeInputValueSetter.call(input, proc + "|||" + anio + "|||" + Date.now());
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
+            }
         };
     });
 
