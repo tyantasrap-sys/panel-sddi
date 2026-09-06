@@ -138,8 +138,7 @@ a[href*="github.com"], a[href*="streamlit.io"] { pointer-events: none !important
 .tarjeta-equipo { background-color: #FFFFFF; padding: 12px 10px; border-radius: 10px; border-top: 4px solid #2980B9; box-shadow: 0 3px 8px rgba(0,0,0,0.04); text-align: center; margin-bottom: 10px; height: 120px !important; display: flex; flex-direction: column; justify-content: center; }
 div[data-testid="stExpander"] summary p { font-size: 14px !important; font-weight: 400 !important; color: #2C3E50 !important; }
 
-/* ESTILOS GLOBALES PARA TABLAS HTML MATRICIALES (COMPACTADAS Y PROPORCIONALES) */
-/* Se añadió min-width para forzar el scroll horizontal en dispositivos móviles */
+/* ESTILOS GLOBALES PARA TABLAS HTML MATRICIALES */
 .tabla-matricial { width: 100%; min-width: 750px; border-collapse: collapse; font-family: 'Inter', sans-serif; }
 .tabla-matricial th { background-color: #2980B9; color: #FFFFFF; text-align: center; padding: 6px 8px; font-size: 11px; font-weight: 700; border: 1px solid #1A5276; text-transform: uppercase; line-height: 1.2; }
 .tabla-matricial th.header-secundario { background-color: #F8F9F9; color: #7F8C8D; border-bottom: 2px solid #BDC3C7; border-color: #E0E6ED; font-size: 12px; }
@@ -316,7 +315,6 @@ with tab_gestion:
             with m4: crear_tarjeta("🔴 Paralizados (+6 meses)", df[df["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)].shape[0], "#E74C3C", id_click="acciones")
 
         with tab_acc_eq:
-            # Se ha modificado overflow: hidden por overflow-x: auto
             html_acc = """
             <div style="max-width: 900px; margin: 10px auto 20px auto; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.04); border: 1px solid #BDC3C7; background-color: #FFFFFF; overflow-x: auto;">
                 <table class="tabla-matricial">
@@ -337,12 +335,13 @@ with tab_gestion:
                 t_act = df_e[df_e["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False)].shape[0]
                 t_len = df_e[df_e["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df_e["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False)].shape[0]
                 t_par = df_e[df_e["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)].shape[0]
+                
                 html_acc += f"<tr>"
-                html_acc += f"<td class='col-equipo celda-equipo-clic' data-equipo='{eq}'>{eq}</td>"
-                html_acc += f"<td class='celda-equipo-clic' data-equipo='{eq}'>{t_act}</td>"
-                html_acc += f"<td class='celda-equipo-clic' data-equipo='{eq}'>{t_len}</td>"
-                html_acc += f"<td class='celda-equipo-clic' data-equipo='{eq}'>{t_par}</td>"
-                html_acc += f"<td class='celda-equipo-clic' data-equipo='{eq}' style='font-weight:900;'>{t_tot}</td>"
+                html_acc += f"<td class='col-equipo celda-equipo-clic celda-acciones-clic' data-equipo='{eq}'>{eq}</td>"
+                html_acc += f"<td class='celda-equipo-clic celda-acciones-clic' data-equipo='{eq}'>{t_act}</td>"
+                html_acc += f"<td class='celda-equipo-clic celda-acciones-clic' data-equipo='{eq}'>{t_len}</td>"
+                html_acc += f"<td class='celda-equipo-clic celda-acciones-clic' data-equipo='{eq}'>{t_par}</td>"
+                html_acc += f"<td class='celda-equipo-clic celda-acciones-clic' data-equipo='{eq}' style='font-weight:900;'>{t_tot}</td>"
                 html_acc += f"</tr>"
             
             html_acc += "</tbody></table></div>"
@@ -399,12 +398,12 @@ with tab_gestion:
                 for eq in equipos_lista:
                     df_e = df[df["Equipo"] == eq]
                     conteo_e = df_e['Año_Temp'].value_counts()
-                    html_anio_eq += f"<tr><td class='col-equipo celda-equipo-clic' data-equipo='{eq}'>{eq}</td>"
+                    html_anio_eq += f"<tr><td class='col-equipo celda-equipo-clic celda-anios-clic' data-equipo='{eq}'>{eq}</td>"
                     for a in list_años:
                         val = conteo_e.get(a, 0)
                         txt = str(val) if val > 0 else "-"
-                        html_anio_eq += f"<td class='celda-equipo-clic' data-equipo='{eq}'>{txt}</td>"
-                    html_anio_eq += f"<td class='celda-equipo-clic' data-equipo='{eq}' style='font-weight:900;'>{len(df_e)}</td></tr>"
+                        html_anio_eq += f"<td class='celda-equipo-clic celda-anios-clic' data-equipo='{eq}'>{txt}</td>"
+                    html_anio_eq += f"<td class='celda-equipo-clic celda-anios-clic' data-equipo='{eq}' style='font-weight:900;'>{len(df_e)}</td></tr>"
                 
                 html_anio_eq += "</tbody></table></div>"
                 st.markdown(html_anio_eq, unsafe_allow_html=True)
@@ -440,20 +439,6 @@ with tab_gestion:
     # ==============================================================================
     elif st.session_state.capa_actual == 2:
         
-        # SCRIPT INVISIBLE PARA FORZAR EL SCROLL ARRIBA AL ENTRAR A LA CAPA 2
-        components.html("""
-        <script>
-        setTimeout(function() {
-            const anchor = window.parent.document.getElementById('ancla-top');
-            if(anchor) {
-                anchor.scrollIntoView({behavior: 'instant', block: 'start'});
-            } else {
-                window.parent.scrollTo(0, 0);
-            }
-        }, 150);
-        </script>
-        """, height=0, width=0)
-        
         eq_sel = st.session_state.equipo_sel
         df_eq = df[df["Equipo"] == eq_sel].copy()
         profesionales_lista = df_eq["Profesional"].value_counts().sort_values(ascending=False).index.tolist()
@@ -463,6 +448,8 @@ with tab_gestion:
         # ------------------------------------------------------------------------------
         # CAPA 2 - BLOQUE 1: ÚLTIMA ACCIÓN REALIZADA
         # ------------------------------------------------------------------------------
+        # Inyectamos el ancla de destino para el scroll de acciones
+        st.markdown("<div id='ancla-acciones'></div>", unsafe_allow_html=True)
         st.markdown("<h4 style='color:#2C3E50; margin-bottom:5px;'>📌 Expedientes por última acción realizada</h4>", unsafe_allow_html=True)
         t_acc_gen_prof, t_acc_prof = st.tabs(["📊 Resumen General", "👨‍💼 Por Profesional"])
         
@@ -474,7 +461,6 @@ with tab_gestion:
             with k4: crear_tarjeta("🔴 Paralizados (+6 meses)", df_eq[df_eq["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)].shape[0], "#E74C3C", id_click="acciones_prof")
 
         with t_acc_prof:
-            # Se ha modificado overflow: hidden por overflow-x: auto
             html_acc_p = """
             <div style="max-width: 900px; margin: 10px auto 20px auto; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.04); border: 1px solid #BDC3C7; background-color: #FFFFFF; overflow-x: auto;">
                 <table class="tabla-matricial">
@@ -504,6 +490,8 @@ with tab_gestion:
         # CAPA 2 - BLOQUE 2: AÑO DE CREACIÓN
         # ------------------------------------------------------------------------------
         st.markdown("<hr style='border:none; border-top:1px dashed #E0E6ED; margin:25px 0 15px 0;'>", unsafe_allow_html=True)
+        # Inyectamos el ancla de destino para el scroll de años
+        st.markdown("<div id='ancla-anios'></div>", unsafe_allow_html=True)
         st.markdown("<h4 style='color:#2C3E50; margin-bottom:5px;'>📅 Expedientes por año de creación</h4>", unsafe_allow_html=True)
         
         t_anio_gen_prof, t_anio_prof = st.tabs(["📊 Resumen General", "👨‍💼 Por Profesional"])
@@ -695,82 +683,132 @@ with tab_gestion:
                         else:
                             st.info("No existen estados procesados.")
 
-    # ==============================================================================
-    # INYECCIÓN JAVASCRIPT GLOBAL PARA CLICS E INTERACTIVIDAD AVANZADA
-    # ==============================================================================
-    components.html("""
-    <script>
-    setTimeout(function() {
-        const parentDOM = window.parent.document;
-        
-        // Clics Capa 1: Última Acción General -> Por Equipos
-        const tAcciones = parentDOM.querySelectorAll('.tarjeta-clic-acciones');
-        tAcciones.forEach(el => {
-            el.onclick = function() {
-                const tabs = Array.from(parentDOM.querySelectorAll('[role="tab"]'));
-                const eqTabs = tabs.filter(t => t.textContent.includes('Comparativo por Equipos'));
-                if(eqTabs.length > 0) eqTabs[0].click();
-            };
-        });
+# ==============================================================================
+# INYECCIÓN JAVASCRIPT GLOBAL PARA CLICS E INTERACTIVIDAD DE NAVEGACIÓN
+# ==============================================================================
+components.html("""
+<script>
+setTimeout(function() {
+    const parentDOM = window.parent.document;
+    
+    // -----------------------------------------------------------
+    // 1. CAPTURAR CLICS EN LA CAPA 1 PARA NAVEGAR A LA CAPA 2
+    // -----------------------------------------------------------
+    
+    // Clics en la tabla de Última Acción (Capa 1)
+    const celdasAcciones = parentDOM.querySelectorAll('.celda-acciones-clic');
+    celdasAcciones.forEach(el => {
+        el.onclick = function() {
+            const equipoInfo = el.getAttribute('data-equipo');
+            const btns = Array.from(parentDOM.querySelectorAll('button'));
+            const btnVerReporte = btns.find(b => b.textContent.includes('Ver Reporte: ' + equipoInfo));
+            if(btnVerReporte) {
+                window.sessionStorage.setItem('scroll_target', 'acciones');
+                btnVerReporte.click();
+            }
+        };
+    });
 
-        // Clics Capa 1: Años General -> Por Equipos
-        const tAnios = parentDOM.querySelectorAll('.tarjeta-clic-anios');
-        tAnios.forEach(el => {
-            el.onclick = function() {
-                const tabs = Array.from(parentDOM.querySelectorAll('[role="tab"]'));
-                const eqTabs = tabs.filter(t => t.textContent.includes('Comparativo por Equipos'));
-                if(eqTabs.length > 1) eqTabs[1].click();
-            };
-        });
+    // Clics en la tabla de Años (Capa 1)
+    const celdasAnios = parentDOM.querySelectorAll('.celda-anios-clic');
+    celdasAnios.forEach(el => {
+        el.onclick = function() {
+            const equipoInfo = el.getAttribute('data-equipo');
+            const btns = Array.from(parentDOM.querySelectorAll('button'));
+            const btnVerReporte = btns.find(b => b.textContent.includes('Ver Reporte: ' + equipoInfo));
+            if(btnVerReporte) {
+                window.sessionStorage.setItem('scroll_target', 'anios');
+                btnVerReporte.click();
+            }
+        };
+    });
 
-        // Clics Capa 1: Celdas de Equipo -> Navegación Directa a Capa 2 (Por Profesional)
-        const celdasEquipo = parentDOM.querySelectorAll('.celda-equipo-clic');
-        celdasEquipo.forEach(el => {
-            el.onclick = function() {
-                const equipoInfo = el.getAttribute('data-equipo');
-                const btns = Array.from(parentDOM.querySelectorAll('button'));
-                const btnVerReporte = btns.find(b => b.textContent.includes('Ver Reporte: ' + equipoInfo));
-                if(btnVerReporte) {
-                    // Guardamos una bandera en sessionStorage para que la Capa 2 sepa que debe abrir las pestañas de Profesionales
-                    window.sessionStorage.setItem('auto_open_profesional', 'true');
-                    btnVerReporte.click();
-                }
-            };
+    // Clic en los botones directos "Ver Reporte" (Forzar tope)
+    const btnsReporte = Array.from(parentDOM.querySelectorAll('button')).filter(b => b.textContent.includes('Ver Reporte: '));
+    btnsReporte.forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            if(!window.sessionStorage.getItem('scroll_target')) {
+                window.sessionStorage.setItem('scroll_target', 'top');
+            }
         });
+    });
 
-        // Clics Capa 2: Última Acción Equipo -> Por Profesional
-        const tAccionesProf = parentDOM.querySelectorAll('.tarjeta-clic-acciones-prof');
-        tAccionesProf.forEach(el => {
-            el.onclick = function() {
-                const tabs = Array.from(parentDOM.querySelectorAll('[role="tab"]'));
-                const profTabs = tabs.filter(t => t.textContent.includes('Por Profesional'));
-                if(profTabs.length > 0) profTabs[0].click();
-            };
-        });
-
-        // Clics Capa 2: Años Equipo -> Por Profesional
-        const tAniosProf = parentDOM.querySelectorAll('.tarjeta-clic-anios-prof');
-        tAniosProf.forEach(el => {
-            el.onclick = function() {
-                const tabs = Array.from(parentDOM.querySelectorAll('[role="tab"]'));
-                const profTabs = tabs.filter(t => t.textContent.includes('Por Profesional'));
-                if(profTabs.length > 1) profTabs[1].click();
-            };
-        });
-
-        // Sistema de auto-apertura de pestañas al venir desde una celda interactiva de la Capa 1
-        if(window.sessionStorage.getItem('auto_open_profesional') === 'true') {
-            setTimeout(function() {
-                const tabs = Array.from(parentDOM.querySelectorAll('[role="tab"]'));
-                const profTabs = tabs.filter(t => t.textContent.includes('Por Profesional'));
-                profTabs.forEach(t => t.click());
-                window.sessionStorage.removeItem('auto_open_profesional');
-            }, 300); // Pequeño retraso para dar tiempo a que Streamlit dibuje las pestañas
+    // -----------------------------------------------------------
+    // 2. EJECUTAR EL SCROLL Y ABRIR PESTAÑAS AL ENTRAR A CAPA 2
+    // -----------------------------------------------------------
+    const target = window.sessionStorage.getItem('scroll_target');
+    if (target) {
+        if (target === 'acciones') {
+            const anchor = parentDOM.getElementById('ancla-acciones');
+            if (anchor) anchor.scrollIntoView({behavior: 'smooth', block: 'start'});
+            
+            const tabs = Array.from(parentDOM.querySelectorAll('[role="tab"]'));
+            const profTabs = tabs.filter(t => t.textContent.includes('Por Profesional'));
+            if(profTabs.length > 0) profTabs[0].click();
+            
+        } else if (target === 'anios') {
+            const anchor = parentDOM.getElementById('ancla-anios');
+            if (anchor) anchor.scrollIntoView({behavior: 'smooth', block: 'start'});
+            
+            const tabs = Array.from(parentDOM.querySelectorAll('[role="tab"]'));
+            const profTabs = tabs.filter(t => t.textContent.includes('Por Profesional'));
+            if(profTabs.length > 1) profTabs[1].click();
+            
+        } else if (target === 'top') {
+            const anchorTop = parentDOM.getElementById('ancla-top');
+            if (anchorTop) {
+                anchorTop.scrollIntoView({behavior: 'smooth', block: 'start'});
+            } else {
+                window.parent.scrollTo({top: 0, behavior: 'smooth'});
+            }
         }
         
-    }, 500);
-    </script>
-    """, height=0, width=0)
+        // Limpiamos el marcador de memoria
+        window.sessionStorage.removeItem('scroll_target');
+    }
+
+    // -----------------------------------------------------------
+    // 3. CAMBIO DE PESTAÑAS DENTRO DE LA MISMA VISTA (TARJETAS)
+    // -----------------------------------------------------------
+    const tAccionesGen = parentDOM.querySelectorAll('.tarjeta-clic-acciones');
+    tAccionesGen.forEach(el => {
+        el.onclick = function() {
+            const tabs = Array.from(parentDOM.querySelectorAll('[role="tab"]'));
+            const eqTabs = tabs.filter(t => t.textContent.includes('Comparativo por Equipos'));
+            if(eqTabs.length > 0) eqTabs[0].click();
+        };
+    });
+
+    const tAniosGen = parentDOM.querySelectorAll('.tarjeta-clic-anios');
+    tAniosGen.forEach(el => {
+        el.onclick = function() {
+            const tabs = Array.from(parentDOM.querySelectorAll('[role="tab"]'));
+            const eqTabs = tabs.filter(t => t.textContent.includes('Comparativo por Equipos'));
+            if(eqTabs.length > 1) eqTabs[1].click();
+        };
+    });
+
+    const tAccionesProf = parentDOM.querySelectorAll('.tarjeta-clic-acciones-prof');
+    tAccionesProf.forEach(el => {
+        el.onclick = function() {
+            const tabs = Array.from(parentDOM.querySelectorAll('[role="tab"]'));
+            const profTabs = tabs.filter(t => t.textContent.includes('Por Profesional'));
+            if(profTabs.length > 0) profTabs[0].click();
+        };
+    });
+
+    const tAniosProf = parentDOM.querySelectorAll('.tarjeta-clic-anios-prof');
+    tAniosProf.forEach(el => {
+        el.onclick = function() {
+            const tabs = Array.from(parentDOM.querySelectorAll('[role="tab"]'));
+            const profTabs = tabs.filter(t => t.textContent.includes('Por Profesional'));
+            if(profTabs.length > 1) profTabs[1].click();
+        };
+    });
+
+}, 400);
+</script>
+""", height=0, width=0)
 
 # ==============================================================================
 # CONTENIDO DE LA PESTAÑA 2: AVANCE DE PRODUCCIÓN (ENRUTAMIENTO NATIVO Y SEGURO)
