@@ -139,7 +139,8 @@ a[href*="github.com"], a[href*="streamlit.io"] { pointer-events: none !important
 div[data-testid="stExpander"] summary p { font-size: 14px !important; font-weight: 400 !important; color: #2C3E50 !important; }
 
 /* ESTILOS GLOBALES PARA TABLAS HTML MATRICIALES (COMPACTADAS Y PROPORCIONALES) */
-.tabla-matricial { width: 100%; border-collapse: collapse; font-family: 'Inter', sans-serif; }
+/* Se añadió min-width para forzar el scroll horizontal en dispositivos móviles */
+.tabla-matricial { width: 100%; min-width: 750px; border-collapse: collapse; font-family: 'Inter', sans-serif; }
 .tabla-matricial th { background-color: #2980B9; color: #FFFFFF; text-align: center; padding: 6px 8px; font-size: 11px; font-weight: 700; border: 1px solid #1A5276; text-transform: uppercase; line-height: 1.2; }
 .tabla-matricial th.header-secundario { background-color: #F8F9F9; color: #7F8C8D; border-bottom: 2px solid #BDC3C7; border-color: #E0E6ED; font-size: 12px; }
 .tabla-matricial th.col-fija { width: 20%; min-width: 180px; text-align: left; padding-left: 15px; white-space: nowrap; }
@@ -158,6 +159,7 @@ def mostrar_encabezado(titulo, subtitulo, mostrar_volver=False):
                 st.rerun()
     with col_header:
         html_encabezado = f"""
+        <div id='ancla-top'></div>
         <div style='display: flex; flex-direction: row; align-items: center; justify-content: center; position: relative; width: 100%; margin-bottom: 25px; flex-wrap: wrap; gap: 20px;'>
             <div style='flex: 1 1 300px; text-align: center; order: 1;'>
                 <h1 style='margin:0; color:#1A252F; font-size: clamp(24px, 4vw, 36px); line-height: 1.2;'>{titulo}</h1>
@@ -314,8 +316,9 @@ with tab_gestion:
             with m4: crear_tarjeta("🔴 Paralizados (+6 meses)", df[df["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)].shape[0], "#E74C3C", id_click="acciones")
 
         with tab_acc_eq:
+            # Se ha modificado overflow: hidden por overflow-x: auto
             html_acc = """
-            <div style="max-width: 900px; margin: 10px auto 20px auto; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.04); border: 1px solid #BDC3C7; background-color: #FFFFFF; overflow: hidden;">
+            <div style="max-width: 900px; margin: 10px auto 20px auto; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.04); border: 1px solid #BDC3C7; background-color: #FFFFFF; overflow-x: auto;">
                 <table class="tabla-matricial">
                     <thead>
                         <tr>
@@ -334,7 +337,6 @@ with tab_gestion:
                 t_act = df_e[df_e["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False)].shape[0]
                 t_len = df_e[df_e["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df_e["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False)].shape[0]
                 t_par = df_e[df_e["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)].shape[0]
-                # Inyección de atributos data-equipo y clase celda-equipo-clic
                 html_acc += f"<tr>"
                 html_acc += f"<td class='col-equipo celda-equipo-clic' data-equipo='{eq}'>{eq}</td>"
                 html_acc += f"<td class='celda-equipo-clic' data-equipo='{eq}'>{t_act}</td>"
@@ -442,8 +444,13 @@ with tab_gestion:
         components.html("""
         <script>
         setTimeout(function() {
-            window.parent.document.querySelector('.main').scrollTo({top: 0, behavior: 'instant'});
-        }, 100);
+            const anchor = window.parent.document.getElementById('ancla-top');
+            if(anchor) {
+                anchor.scrollIntoView({behavior: 'instant', block: 'start'});
+            } else {
+                window.parent.scrollTo(0, 0);
+            }
+        }, 150);
         </script>
         """, height=0, width=0)
         
@@ -467,8 +474,9 @@ with tab_gestion:
             with k4: crear_tarjeta("🔴 Paralizados (+6 meses)", df_eq[df_eq["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)].shape[0], "#E74C3C", id_click="acciones_prof")
 
         with t_acc_prof:
+            # Se ha modificado overflow: hidden por overflow-x: auto
             html_acc_p = """
-            <div style="max-width: 900px; margin: 10px auto 20px auto; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.04); border: 1px solid #BDC3C7; background-color: #FFFFFF; overflow: hidden;">
+            <div style="max-width: 900px; margin: 10px auto 20px auto; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.04); border: 1px solid #BDC3C7; background-color: #FFFFFF; overflow-x: auto;">
                 <table class="tabla-matricial">
                     <thead>
                         <tr>
