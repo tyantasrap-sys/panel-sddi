@@ -107,22 +107,43 @@ def mostrar_modal_detalle(proc, anio, df_base):
     st.markdown(f"<h5 style='color:#2980B9; margin-top:0;'>Procedimiento: {proc} | Año: {anio}</h5>", unsafe_allow_html=True)
     
     if len(df_base.columns) >= 13:
-        # Extraemos exactamente las columnas: A(0), H(7), J(9), K(10), L(11), M(12)
-        df_modal = df_base.iloc[:, [0, 7, 9, 10, 11, 12]].copy()
-        df_modal.columns = ["Expediente", "Administrado", "Año", "Procedimiento", "Trazabilidad", "Estado"]
+        # Extraemos las columnas exactas solicitadas más la columna F para calcular el estado
+        # A(0)=Expediente, F(5)=Trazabilidad, H(7)=Profesional, J(9)=Año, K(10)=Procedimiento, L(11)=Administrado, M(12)=Estado
+        df_modal = df_base.iloc[:, [0, 7, 9, 10, 11, 12, 5]].copy()
+        df_modal.columns = ["Expediente", "Profesional", "Año", "Procedimiento", "Administrado", "Estado", "Trazabilidad_Oculta"]
         
-        # REGLA DE ANONIMIZACIÓN (Protección de Datos Personales)
-        # Si el procedimiento es una COMPRAVENTA, se blinda el nombre del administrado
-        mask_compraventa = df_modal["Procedimiento"].astype(str).str.upper().str.contains("COMPRAVENTA")
-        df_modal.loc[mask_compraventa, "Administrado"] = "PERSONA NATURAL"
-        
-        # Aplicamos los filtros del clic
+        # Filtramos primero para trabajar con menos datos
         if proc != 'TOTAL':
             df_modal = df_modal[df_modal["Procedimiento"].astype(str).str.strip().str.upper() == proc.upper()]
         if anio != 'TOTAL':
             df_modal = df_modal[df_modal["Año"].astype(str) == str(anio)]
+            
+        # REGLA DE ANONIMIZACIÓN (Protección de Datos Personales)
+        # 1. Identificar si es compraventa
+        mask_compraventa = df_modal["Procedimiento"].astype(str).str.upper().str.contains("COMPRAVENTA")
         
-        st.dataframe(df_modal, use_container_width=True, hide_index=True)
+        # 2. Identificar si es entidad jurídica/estatal
+        palabras_entidad = "MUNICIPALIDAD|GOBIERNO|MINISTERIO|S\.A\.|S\.A\.C\.|S\.R\.L\.|E\.I\.R\.L\.|ASOCIACION|EMPRESA|COMUNIDAD|CONSORCIO|DIRECCION|SUPERINTENDENCIA|UNIVERSIDAD|COOPERATIVA|SINDICATO|PROYECTO|IGLESIA|COMITE|JUNTA"
+        mask_juridica = df_modal["Administrado"].astype(str).str.upper().str.contains(palabras_entidad, na=False)
+        
+        # 3. Reemplazar solo si es Compraventa Y NO es entidad jurídica
+        mask_ocultar = mask_compraventa & ~mask_juridica
+        df_modal.loc[mask_ocultar, "Administrado"] = "PERSONA NATURAL"
+        
+        # REGLA PARA LA 7MA COLUMNA: ESTADO DE ALERTA POR TRAZABILIDAD
+        def calcular_alerta(val):
+            v = str(val).lower()
+            if "semana" in v: return "🟢 Trámite Activo"
+            elif "año" in v or "6 meses" in v or "no se encontro resultado" in v: return "🔴 Paralizado"
+            elif "mes" in v: return "🟡 Flujo Lento"
+            return "⚪ Sin Datos"
+            
+        df_modal["Alerta Visual"] = df_modal["Trazabilidad_Oculta"].apply(calcular_alerta)
+        
+        # Ocultamos la trazabilidad cruda y mostramos la estructura limpia final
+        df_mostrar = df_modal[["Expediente", "Profesional", "Año", "Procedimiento", "Administrado", "Estado", "Alerta Visual"]]
+        
+        st.dataframe(df_mostrar, use_container_width=True, hide_index=True)
     else:
         st.error("No hay suficientes columnas en la base de datos para mostrar el detalle.")
 
@@ -168,7 +189,7 @@ a[href*="github.com"], a[href*="streamlit.io"] { pointer-events: none !important
 .tarjeta-equipo { background-color: #FFFFFF; padding: 12px 10px; border-radius: 10px; border-top: 4px solid #2980B9; box-shadow: 0 3px 8px rgba(0,0,0,0.04); text-align: center; margin-bottom: 10px; height: 120px !important; display: flex; flex-direction: column; justify-content: center; }
 div[data-testid="stExpander"] summary p { font-size: 14px !important; font-weight: 400 !important; color: #2C3E50 !important; }
 
-/* ESTILOS GLOBALES PARA TABLAS HTML MATRICIALES (AFINADOS) */
+/* ESTILOS GLOBALES PARA TABLAS HTML MATRICIALES */
 .tabla-matricial { width: 100%; min-width: 750px; border-collapse: collapse; font-family: 'Inter', sans-serif; }
 .tabla-matricial th { background-color: #2980B9; color: #FFFFFF; text-align: center; padding: 6px 8px; font-size: 11px; font-weight: 700; border: 1px solid #1A5276; text-transform: uppercase; line-height: 1.2; }
 .tabla-matricial th.header-secundario { background-color: #F8F9F9; color: #7F8C8D; border-bottom: 2px solid #BDC3C7; border-color: #E0E6ED; font-size: 12px; }
@@ -431,8 +452,6 @@ with tab_gestion:
                 
             with tab_anio_proc:
                 list_años = df['Año_Temp'].value_counts().sort_index(ascending=True).index.tolist()
-                
-                # ORDENAMIENTO DINÁMICO: De mayor a menor cantidad total de expedientes
                 procedimientos_ordenados = df['Procedimiento_Temp'].value_counts().index.tolist()
                 
                 html_anio_proc = """
@@ -525,7 +544,6 @@ with tab_gestion:
     # ==============================================================================
     elif st.session_state.capa_actual == 2:
         
-        # SCRIPT INVISIBLE PARA EL SCROLL CONTEXTUAL AL ENTRAR A LA CAPA 2
         components.html("""
         <script>
         setTimeout(function() {
@@ -861,7 +879,6 @@ setTimeout(function() {
             }
         }
         
-        // Limpiamos el marcador de memoria
         window.sessionStorage.removeItem('scroll_target');
     }
 
@@ -917,7 +934,6 @@ setTimeout(function() {
             if(inputs.length > 0) {
                 const input = inputs[0];
                 const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
-                // Agregamos Date.now() para que Streamlit detecte el cambio de variable siempre
                 nativeInputValueSetter.call(input, proc + "|||" + anio + "|||" + Date.now());
                 input.dispatchEvent(new Event('input', { bubbles: true }));
                 input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
