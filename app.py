@@ -245,7 +245,6 @@ h1 a svg, h2 a svg, h3 a svg { display: none !important; }
 .celda-equipo-clic { cursor: pointer; transition: all 0.2s ease; }
 .celda-equipo-clic:hover { background-color: #E8F4F8 !important; transform: scale(1.03); box-shadow: 0 4px 8px rgba(0,0,0,0.1); z-index: 10; position: relative; color: #2980B9; }
 
-/* CLASE MEJORADA PARA QUE LAS CELDAS DE PROCEDIMIENTO MUESTREN LA MANITO (POINTER) */
 .celda-proc-clic, .mod-proc, .mod-proc-eq { cursor: pointer !important; transition: all 0.2s ease; }
 .celda-proc-clic:hover, .mod-proc:hover, .mod-proc-eq:hover { background-color: #E8F4F8 !important; transform: scale(1.05); box-shadow: 0 4px 8px rgba(0,0,0,0.1); z-index: 10; position: relative; color: #2980B9; font-weight: 900; }
 
@@ -601,7 +600,7 @@ with tab_gestion:
             st.markdown(html_acc_p, unsafe_allow_html=True)
 
         # ------------------------------------------------------------------------------
-        # CAPA 2 - BLOQUE 2: AÑO DE CREACIÓN
+        # CAPA 2 - BLOQUE 2: AÑO DE CREACIÓN (CON TOTAL GENERAL EN CADA PESTAÑA)
         # ------------------------------------------------------------------------------
         st.markdown("<hr style='border:none; border-top:1px dashed #E0E6ED; margin:25px 0 15px 0;'><div id='ancla-anios'></div><h4 style='color:#2C3E50; margin-bottom:5px;'>📅 Expedientes por año de creación</h4>", unsafe_allow_html=True)
         
@@ -617,12 +616,16 @@ with tab_gestion:
                 html_tabla_eq = f"""
                 <div style="overflow-x: auto; margin: 10px auto 20px auto; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.04); border: 1px solid #BDC3C7; background-color: #FFFFFF;">
                     <table class="tabla-matricial"><thead><tr>
-                    <th colspan="{len(conteo_años_eq)}" style="padding: 6px; letter-spacing: 1px; text-transform: uppercase;">TOTAL EXPEDIENTES DEL EQUIPO POR AÑO: {len(df_eq)}</th>
+                    <th colspan="{len(conteo_años_eq) + 1}" style="padding: 6px; letter-spacing: 1px; text-transform: uppercase;">TOTAL EXPEDIENTES DEL EQUIPO POR AÑO: {len(df_eq)}</th>
                     </tr><tr>"""
                 for año in conteo_años_eq.index: html_tabla_eq += f"<th class='header-secundario'>{año}</th>"
-                html_tabla_eq += "</tr></thead><tbody><tr>"
+                html_tabla_eq += "<th style='background-color: #1F618D;'>TOTAL GENERAL</th></tr></thead><tbody><tr>"
+                
                 for cantidad, año in zip(conteo_años_eq.values, conteo_años_eq.index):
                     html_tabla_eq += f"<td class='celda-equipo-clic mod-anio-gen-eq' data-equipo='{eq_sel}' data-anio='{año}'>{cantidad}</td>"
+                
+                # TOTAL GENERAL CELL IN RESUMEN GENERAL
+                html_tabla_eq += f"<td class='celda-equipo-clic mod-anio-gen-eq' data-equipo='{eq_sel}' data-anio='TOTAL' style='font-weight:900; background-color: #E8F4F8;'>{len(df_eq)}</td>"
                 html_tabla_eq += "</tr></tbody></table></div>"
                 st.markdown(html_tabla_eq, unsafe_allow_html=True)
 
@@ -644,6 +647,14 @@ with tab_gestion:
                         if val > 0: html_anio_proc_eq += f"<td class='mod-proc-eq' data-equipo='{eq_sel}' data-proc='{proc}' data-anio='{a}'>{txt}</td>"
                         else: html_anio_proc_eq += f"<td>{txt}</td>"
                     html_anio_proc_eq += f"<td class='mod-proc-eq' data-equipo='{eq_sel}' data-proc='{proc}' data-anio='TOTAL' style='font-weight:900;'>{len(df_pr)}</td></tr>"
+                
+                # TOTAL GENERAL ROW IN POR PROCEDIMIENTO
+                html_anio_proc_eq += "<tr style='background-color: #F8F9F9; font-weight: 900;'><td class='col-proc mod-proc-eq' data-equipo='" + eq_sel + "' data-proc='TOTAL' data-anio='TOTAL' style='text-align: left; padding-left: 15px;'>TOTAL GENERAL</td>"
+                for a in list_años_eq:
+                    val_a = len(df_eq[df_eq['Año_Temp'] == a])
+                    html_anio_proc_eq += f"<td class='mod-proc-eq' data-equipo='{eq_sel}' data-proc='TOTAL' data-anio='{a}'>{val_a}</td>"
+                html_anio_proc_eq += f"<td class='mod-proc-eq' data-equipo='{eq_sel}' data-proc='TOTAL' data-anio='TOTAL' style='background-color: #E8F4F8;'>{len(df_eq)}</td></tr>"
+                
                 html_anio_proc_eq += "</tbody></table></div>"
                 st.markdown(html_anio_proc_eq, unsafe_allow_html=True)
 
@@ -663,6 +674,14 @@ with tab_gestion:
                         if val > 0: html_anio_p += f"<td class='celda-equipo-clic mod-anio-prof' data-equipo='{eq_sel}' data-prof='{prof}' data-anio='{a}'>{txt}</td>"
                         else: html_anio_p += f"<td>{txt}</td>"
                     html_anio_p += f"<td class='celda-equipo-clic mod-anio-prof' data-equipo='{eq_sel}' data-prof='{prof}' data-anio='TOTAL' style='font-weight:900;'>{len(df_pr)}</td></tr>"
+                
+                # TOTAL GENERAL ROW IN POR PROFESIONAL
+                html_anio_p += "<tr style='background-color: #F8F9F9; font-weight: 900;'><td class='col-equipo celda-equipo-clic mod-anio-prof' data-equipo='" + eq_sel + "' data-prof='TOTAL' data-anio='TOTAL' style='text-align: left; padding-left: 15px;'>TOTAL GENERAL</td>"
+                for a in list_años_eq:
+                    val_a = len(df_eq[df_eq['Año_Temp'] == a])
+                    html_anio_p += f"<td class='celda-equipo-clic mod-anio-prof' data-equipo='{eq_sel}' data-prof='TOTAL' data-anio='{a}'>{val_a}</td>"
+                html_anio_p += f"<td class='celda-equipo-clic mod-anio-prof' data-equipo='{eq_sel}' data-prof='TOTAL' data-anio='TOTAL' style='background-color: #E8F4F8;'>{len(df_eq)}</td></tr>"
+
                 html_anio_p += "</tbody></table></div>"
                 st.markdown(html_anio_p, unsafe_allow_html=True)
 
