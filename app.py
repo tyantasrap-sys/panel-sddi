@@ -123,9 +123,10 @@ footer, #MainMenu, [data-testid="stDecoration"], [data-testid="stToolbar"] { dis
 h1 a svg, h2 a svg, h3 a svg { display: none !important; } 
 a[href*="github.com"], a[href*="streamlit.io"] { pointer-events: none !important; display: none !important; }
 
-.tarjeta-metrica { background-color: #FFFFFF; padding: 8px 10px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.04); margin-bottom: 12px; text-align: center; height: 85px !important; display: flex; flex-direction: column; justify-content: center; align-items: center; }
-.tarjeta-titulo { color: #7F8C8D; font-size: 10px; margin: 0; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; min-height: 24px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px; line-height: 1.1; }
-.tarjeta-valor { color: #2C3E50; font-size: 26px; margin: 0 !important; font-weight: 700; line-height: 1; }
+/* SE AJUSTÓ LA TARJETA METRICA PARA SER MÁS COMPACTA */
+.tarjeta-metrica { background-color: #FFFFFF; padding: 6px 10px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.04); margin-bottom: 12px; text-align: center; height: 68px !important; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+.tarjeta-titulo { color: #7F8C8D; font-size: 10px; margin: 0; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; min-height: 18px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px; line-height: 1.1; }
+.tarjeta-valor { color: #2C3E50; font-size: 24px; margin: 0 !important; font-weight: 700; line-height: 1; }
 .tarjeta-equipo { background-color: #FFFFFF; padding: 12px 10px; border-radius: 10px; border-top: 4px solid #2980B9; box-shadow: 0 3px 8px rgba(0,0,0,0.04); text-align: center; margin-bottom: 10px; height: 120px !important; display: flex; flex-direction: column; justify-content: center; }
 div[data-testid="stExpander"] summary p { font-size: 14px !important; font-weight: 400 !important; color: #2C3E50 !important; }
 </style>
@@ -283,11 +284,12 @@ with tab_gestion:
         with m3: crear_tarjeta("🟡 Flujo Lento (1 a 5 meses)", df[df["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False)].shape[0], "#F1C40F")
         with m4: crear_tarjeta("🔴 Paralizados (+6 meses)", df[df["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)].shape[0], "#E74C3C")
 
-        # BLOQUE 2: AÑO DE CREACIÓN (Tabla Horizontal Estilizada)
+        # BLOQUE 2: AÑO DE CREACIÓN (Tabla Horizontal Estilizada y Compacta)
         st.markdown("<hr style='border:none; border-top:1px dashed #E0E6ED; margin:25px 0 15px 0;'>", unsafe_allow_html=True)
         st.markdown("<h4 style='color:#2C3E50; margin-bottom:15px;'>📅 Expedientes por año de creación</h4>", unsafe_allow_html=True)
         
         if len(df.columns) >= 10:
+            total_exp = len(df)
             col_j = df.columns[9]
             años = df[col_j].astype(str).str.extract(r'((?:19|20)\d{2})')[0].fillna("Sin Fecha")
             conteo_años = años.value_counts().sort_index(ascending=True)
@@ -297,15 +299,15 @@ with tab_gestion:
                 <table style="width: 100%; border-collapse: collapse; font-family: 'Inter', sans-serif;">
                     <thead>
                         <tr>
-                            <th colspan="{len(conteo_años)}" style="background-color: #2980B9; color: #FFFFFF; text-align: center; padding: 10px; font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;">
-                                Total Expedientes por Año
+                            <th colspan="{len(conteo_años)}" style="background-color: #2980B9; color: #FFFFFF; text-align: center; padding: 6px; font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;">
+                                TOTAL EXPEDIENTES POR AÑO: {total_exp}
                             </th>
                         </tr>
                         <tr>
             """
             
             for año in conteo_años.index:
-                html_tabla += f"<th style='background-color: #F8F9F9; color: #7F8C8D; text-align: center; padding: 8px 15px; font-size: 13px; font-weight: 700; border: 1px solid #E0E6ED; border-bottom: 2px solid #BDC3C7;'>{año}</th>"
+                html_tabla += f"<th style='background-color: #F8F9F9; color: #7F8C8D; text-align: center; padding: 5px 10px; font-size: 12px; font-weight: 700; border: 1px solid #E0E6ED; border-bottom: 2px solid #BDC3C7;'>{año}</th>"
                 
             html_tabla += """
                         </tr>
@@ -315,7 +317,7 @@ with tab_gestion:
             """
             
             for cantidad in conteo_años.values:
-                html_tabla += f"<td style='background-color: #FFFFFF; color: #2C3E50; text-align: center; padding: 12px 15px; font-size: 18px; font-weight: 900; border: 1px solid #E0E6ED;'>{cantidad}</td>"
+                html_tabla += f"<td style='background-color: #FFFFFF; color: #2C3E50; text-align: center; padding: 8px 10px; font-size: 16px; font-weight: 900; border: 1px solid #E0E6ED;'>{cantidad}</td>"
                 
             html_tabla += """
                         </tr>
@@ -354,11 +356,12 @@ with tab_gestion:
         df_eq = df[df["Equipo"] == eq_sel]
         mostrar_encabezado(f"Reporte Dinámico: {eq_sel}", "Evaluación detallada de estados y carga por especialista.", mostrar_volver=True)
 
+        # LEYENDAS INCORPORADAS EN CAPA 2
         k1, k2, k3, k4 = st.columns(4)
         with k1: crear_tarjeta("Total Equipo", len(df_eq), "#3498DB")
-        with k2: crear_tarjeta("🟢 Trámite Activo", df_eq[df_eq["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False)].shape[0], "#2ECC71")
-        with k3: crear_tarjeta("🟡 Flujo Lento", df_eq[df_eq["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df_eq["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False)].shape[0], "#F1C40F")
-        with k4: crear_tarjeta("🔴 Paralizados", df_eq[df_eq["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)].shape[0], "#E74C3C")
+        with k2: crear_tarjeta("🟢 Trámite Activo (1-3 semanas)", df_eq[df_eq["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False)].shape[0], "#2ECC71")
+        with k3: crear_tarjeta("🟡 Flujo Lento (1 a 5 meses)", df_eq[df_eq["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df_eq["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False)].shape[0], "#F1C40F")
+        with k4: crear_tarjeta("🔴 Paralizados (+6 meses)", df_eq[df_eq["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)].shape[0], "#E74C3C")
 
         st.markdown("<hr style='border:none; border-top:1px solid #E0E6ED; margin:20px 0;'><h4 style='color:#2C3E50;'>👨‍💼 Relación de Profesionales</h4>", unsafe_allow_html=True)
         profesionales = df_eq["Profesional"].value_counts().sort_values(ascending=False).index.tolist()
