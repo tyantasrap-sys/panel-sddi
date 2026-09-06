@@ -116,6 +116,10 @@ def mostrar_modal_detalle(tipo_clic, param1, param2, df_base):
         elif param2 == 'LENTO': df_modal = df_modal[df_modal["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df_modal["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False)]
         elif param2 == 'PARALIZADO': df_modal = df_modal[df_modal["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)]
         
+    elif tipo_clic == "ANIO_GEN":
+        st.markdown(f"<h5 style='color:#2980B9; margin-top:0;'>Resumen General | Año: {param1}</h5>", unsafe_allow_html=True)
+        if param1 != 'TOTAL': df_modal = df_modal[df_modal.iloc[:, 9].astype(str).str.extract(r'((?:19|20)\d{2})')[0] == str(param1)]
+
     elif tipo_clic == "ANIO_EQ":
         st.markdown(f"<h5 style='color:#2980B9; margin-top:0;'>Equipo: {param1} | Año: {param2}</h5>", unsafe_allow_html=True)
         if param1 != 'TOTAL': df_modal = df_modal[df_modal["Equipo"] == param1]
@@ -185,6 +189,9 @@ st.markdown("""
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap');
 html, body, [class*="css"], .stApp { font-family: 'Inter', sans-serif !important; background-color: #F4F7F6 !important; }
 .block-container { padding-top: 2rem !important; padding-bottom: 2rem !important; }
+
+/* OCULTAMOS DE FORMA RADICAL EL TEXT_INPUT TÉCNICO DEL MODAL */
+div[data-testid="stTextInput"] { display: none !important; visibility: hidden !important; height: 0 !important; overflow: hidden !important; }
 
 button[kind="primary"] { background-color: #2980B9 !important; border-color: #2980B9 !important; color: white !important; font-weight: 700 !important; }
 button[kind="primary"]:hover { background-color: #1A5276 !important; border-color: #1A5276 !important; }
@@ -369,10 +376,8 @@ with tab_gestion:
         st.error("Error al conectar con la base de datos de Gestión.")
         st.stop()
         
-    # INYECCIÓN DEL CAMPO OCULTO PARA RECEPCIÓN DE TODOS LOS MODALES
-    st.markdown("<div style='display:none; height:0; overflow:hidden;'>", unsafe_allow_html=True)
+    # EL INPUT DEL MODAL ESTÁ AHORA TOTALMENTE INVISIBLE GRACIAS AL CSS GLOBAL
     modal_trigger = st.text_input("modal_trigger", key="modal_trigger_input", label_visibility="hidden")
-    st.markdown("</div>", unsafe_allow_html=True)
     
     if 'last_trigger' not in st.session_state: 
         st.session_state.last_trigger = ""
@@ -380,7 +385,6 @@ with tab_gestion:
     if modal_trigger and modal_trigger != st.session_state.last_trigger:
         st.session_state.last_trigger = modal_trigger
         parts = modal_trigger.split("|||")
-        # El formato JS envía: TIPO ||| PARAM1 ||| PARAM2 ||| TIMESTAMP
         if len(parts) >= 3:
             mostrar_modal_detalle(parts[0], parts[1], parts[2], df)
 
@@ -424,7 +428,6 @@ with tab_gestion:
                 t_len = df_e[df_e["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df_e["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False)].shape[0]
                 t_par = df_e[df_e["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)].shape[0]
                 
-                # Se aplica celda-accion-modal para que dispare el modal en lugar del salto a Capa 2
                 html_acc += f"<tr>"
                 html_acc += f"<td class='col-equipo celda-equipo-clic celda-accion-modal' data-equipo='{eq}' data-tipo='TOTAL'>{eq}</td>"
                 html_acc += f"<td class='celda-equipo-clic celda-accion-modal' data-equipo='{eq}' data-tipo='ACTIVO'>{t_act}</td>"
@@ -468,8 +471,9 @@ with tab_gestion:
                     html_tabla += f"<th class='header-secundario'>{año}</th>"
                 html_tabla += "</tr></thead><tbody><tr>"
                 
-                for cantidad in conteo_años.values:
-                    html_tabla += f"<td class='tarjeta-clic tarjeta-clic-anios'>{cantidad}</td>"
+                # CELDAS INTERACTIVAS DEL RESUMEN GENERAL
+                for cantidad, año in zip(conteo_años.values, conteo_años.index):
+                    html_tabla += f"<td class='celda-equipo-clic celda-anio-gen-modal' data-anio='{año}'>{cantidad}</td>"
                 html_tabla += "</tr></tbody></table></div>"
                 st.markdown(html_tabla, unsafe_allow_html=True)
                 
@@ -526,6 +530,8 @@ with tab_gestion:
                 for eq in equipos_lista:
                     df_e = df[df["Equipo"] == eq]
                     conteo_e = df_e['Año_Temp'].value_counts()
+                    
+                    # CELDAS INTERACTIVAS DEL COMPARATIVO POR EQUIPOS
                     html_anio_eq += f"<tr><td class='col-equipo celda-equipo-clic celda-anio-modal' data-equipo='{eq}' data-anio='TOTAL'>{eq}</td>"
                     for a in list_años:
                         val = conteo_e.get(a, 0)
@@ -651,8 +657,8 @@ with tab_gestion:
                     html_tabla_eq += f"<th class='header-secundario'>{año}</th>"
                 html_tabla_eq += "</tr></thead><tbody><tr>"
                 
-                for cantidad in conteo_años_eq.values:
-                    html_tabla_eq += f"<td class='tarjeta-clic tarjeta-clic-anios-prof'>{cantidad}</td>"
+                for cantidad, año in zip(conteo_años_eq.values, conteo_años_eq.index):
+                    html_tabla_eq += f"<td class='celda-equipo-clic celda-anio-prof-modal' data-prof='TOTAL' data-anio='{año}'>{cantidad}</td>"
                 html_tabla_eq += "</tr></tbody></table></div>"
                 st.markdown(html_tabla_eq, unsafe_allow_html=True)
 
@@ -757,9 +763,52 @@ with tab_gestion:
                             st.dataframe(df_m[existentes], use_container_width=True, hide_index=True, column_config={"URL_Tramite": st.column_config.LinkColumn("🔗 Acción", display_text="Abrir Trámite")})
                     else:
                         st.info("No hay expedientes en esta categoría.")
+        
+        # ------------------------------------------------------------------------------
+        # CAPA 2 - BLOQUE 4: SEGUIMIENTO TÍTULOS SUNARP (SOLO TRANSVERSAL)
+        # ------------------------------------------------------------------------------
+        if eq_sel == "Transversal":
+            st.markdown("<hr style='border:none; border-top:1px solid #E0E6ED; margin:40px 0 20px 0;'><h4 style='color:#2C3E50;'>🏢 Seguimiento Títulos SUNARP</h4>", unsafe_allow_html=True)
+            
+            try:
+                with st.spinner("Sincronizando base de datos registral..."):
+                    df_sunarp = cargar_datos_sunarp()
+            except Exception as e:
+                st.error("Error crítico: Fallo de conexión.")
+                df_sunarp = pd.DataFrame()
+
+            if not df_sunarp.empty:
+                usuarios_sunarp = ["VESPADIN", "VGAMARRA", "MCHAVEZ", "RJIMENEZ", "KPAJUELO"]
+                datos_procesados = clasificar_estados_sunarp(df_sunarp, usuarios_sunarp)
+                
+                for data in datos_procesados:
+                    usu = data["Usuario"]
+                    
+                    with st.expander(f"👤 {usu} — Total: {data['Total']} títulos asignados", expanded=False):
+                        estados_activos = {k: v for k, v in data["Tarjetas"].items() if v["valor"] > 0}
+                        
+                        if estados_activos:
+                            columnas_tarjetas = st.columns(12)
+                            idx_col = 0
+                            for etiqueta, config in estados_activos.items():
+                                with columnas_tarjetas[idx_col % 12]:
+                                    st.markdown(generar_tarjeta_html(etiqueta, config), unsafe_allow_html=True)
+                                idx_col += 1
+                            
+                            st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
+                            _, col_btn = st.columns([10, 2])
+                            with col_btn:
+                                if st.button("Actualizar Estado", key=f"btn_rpa_{usu}", type="secondary", use_container_width=True):
+                                    with st.spinner("Conectando con Google Sheets y transfiriendo datos..."):
+                                        exito = sincronizar_estados_sunarp(usu)
+                                        if exito:
+                                            st.success("Carga Exitosa")
+                                            st.rerun()
+                        else:
+                            st.info("No existen estados procesados.")
 
 # ==============================================================================
-# INYECCIÓN JAVASCRIPT: NUEVO ENRUTAMIENTO DIRECTO A VENTANAS EMERGENTES (MODALES)
+# INYECCIÓN JAVASCRIPT GLOBAL PARA CLICS E INTERACTIVIDAD DE NAVEGACIÓN Y MODALES
 # ==============================================================================
 components.html("""
 <script>
@@ -778,18 +827,23 @@ setTimeout(function() {
         }
     }
 
-    // 1. Enlace de Clics: CAPA 1 (Tablas por Equipos)
+    // 1. Enlace de Clics: CAPA 1 (Tablas de Última Acción)
     parentDOM.querySelectorAll('.celda-accion-modal').forEach(el => {
         el.onclick = function() { triggerModal('ACCION', el.getAttribute('data-equipo'), el.getAttribute('data-tipo')); };
     });
-    parentDOM.querySelectorAll('.celda-anio-modal').forEach(el => {
-        el.onclick = function() { triggerModal('ANIO_EQ', el.getAttribute('data-equipo'), el.getAttribute('data-anio')); };
+
+    // 2. Enlace de Clics: CAPA 1 (Tablas de Años de Creación - Resumen General, Por Proc, Por Equipos)
+    parentDOM.querySelectorAll('.celda-anio-gen-modal').forEach(el => {
+        el.onclick = function() { triggerModal('ANIO_GEN', el.getAttribute('data-anio'), 'TOTAL'); };
     });
     parentDOM.querySelectorAll('.celda-proc-clic').forEach(el => {
         el.onclick = function() { triggerModal('PROC', el.getAttribute('data-proc'), el.getAttribute('data-anio')); };
     });
+    parentDOM.querySelectorAll('.celda-anio-modal').forEach(el => {
+        el.onclick = function() { triggerModal('ANIO_EQ', el.getAttribute('data-equipo'), el.getAttribute('data-anio')); };
+    });
 
-    // 2. Enlace de Clics: CAPA 2 (Tablas por Profesional)
+    // 3. Enlace de Clics: CAPA 2 (Tablas por Profesional)
     parentDOM.querySelectorAll('.celda-accion-prof-modal').forEach(el => {
         el.onclick = function() { triggerModal('ACCION_PROF', el.getAttribute('data-prof'), el.getAttribute('data-tipo')); };
     });
@@ -797,7 +851,7 @@ setTimeout(function() {
         el.onclick = function() { triggerModal('ANIO_PROF', el.getAttribute('data-prof'), el.getAttribute('data-anio')); };
     });
 
-    // 3. CAMBIO DE PESTAÑAS (Métricas Superiores)
+    // 4. CAMBIO DE PESTAÑAS Y RUTAS (Métricas Superiores)
     parentDOM.querySelectorAll('.tarjeta-clic-acciones').forEach(el => {
         el.onclick = function() {
             const tabs = Array.from(parentDOM.querySelectorAll('[role="tab"]'));
@@ -809,7 +863,7 @@ setTimeout(function() {
         el.onclick = function() {
             const tabs = Array.from(parentDOM.querySelectorAll('[role="tab"]'));
             const eqTabs = tabs.filter(t => t.textContent.includes('Comparativo por Equipos'));
-            if(eqTabs.length > 1) eqTabs[1].click(); // En la vista años, 'Equipos' es la pestaña 3 (índice 2)
+            if(eqTabs.length > 1) eqTabs[1].click();
         };
     });
     parentDOM.querySelectorAll('.tarjeta-clic-acciones-prof').forEach(el => {
