@@ -128,9 +128,12 @@ a[href*="github.com"], a[href*="streamlit.io"] { pointer-events: none !important
 .tarjeta-titulo { color: #7F8C8D; font-size: 10px; margin: 0; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; min-height: 18px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px; line-height: 1.1; pointer-events: none; }
 .tarjeta-valor { color: #2C3E50; font-size: 24px; margin: 0 !important; font-weight: 700; line-height: 1; pointer-events: none; }
 
-/* CLASE PARA HACER CLICKABLES LAS TARJETAS Y TABLAS */
+/* CLASES INTERACTIVAS PARA TARJETAS Y CELDAS DE TABLA */
 .tarjeta-clic { cursor: pointer; transition: all 0.2s ease; }
 .tarjeta-clic:hover { transform: translateY(-3px); box-shadow: 0 6px 12px rgba(0,0,0,0.15) !important; z-index: 10; background-color: #FDFEFE !important; }
+
+.celda-equipo-clic { cursor: pointer; transition: all 0.2s ease; }
+.celda-equipo-clic:hover { background-color: #E8F4F8 !important; transform: scale(1.03); box-shadow: 0 4px 8px rgba(0,0,0,0.1); z-index: 10; position: relative; }
 
 .tarjeta-equipo { background-color: #FFFFFF; padding: 12px 10px; border-radius: 10px; border-top: 4px solid #2980B9; box-shadow: 0 3px 8px rgba(0,0,0,0.04); text-align: center; margin-bottom: 10px; height: 120px !important; display: flex; flex-direction: column; justify-content: center; }
 div[data-testid="stExpander"] summary p { font-size: 14px !important; font-weight: 400 !important; color: #2C3E50 !important; }
@@ -139,9 +142,9 @@ div[data-testid="stExpander"] summary p { font-size: 14px !important; font-weigh
 .tabla-matricial { width: 100%; border-collapse: collapse; font-family: 'Inter', sans-serif; }
 .tabla-matricial th { background-color: #2980B9; color: #FFFFFF; text-align: center; padding: 6px 8px; font-size: 11px; font-weight: 700; border: 1px solid #1A5276; text-transform: uppercase; line-height: 1.2; }
 .tabla-matricial th.header-secundario { background-color: #F8F9F9; color: #7F8C8D; border-bottom: 2px solid #BDC3C7; border-color: #E0E6ED; font-size: 12px; }
-.tabla-matricial th.col-fija { width: auto; text-align: left; padding-left: 15px; white-space: nowrap; }
+.tabla-matricial th.col-fija { width: 20%; min-width: 180px; text-align: left; padding-left: 15px; white-space: nowrap; }
 .tabla-matricial td { background-color: #FFFFFF; color: #2C3E50; text-align: center; padding: 6px 10px; font-size: 15px; font-weight: 800; border: 1px solid #E0E6ED; }
-.tabla-matricial td.col-equipo { background-color: #F4F6F7; text-align: left; padding-left: 15px; font-size: 12px; font-weight: 700; color: #1A252F; border: 1px solid #E0E6ED; white-space: nowrap; }
+.tabla-matricial td.col-equipo { background-color: #F4F6F7; text-align: left; padding-left: 15px; font-size: 13px; font-weight: 600; color: #2C3E50; border: 1px solid #E0E6ED; white-space: nowrap; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -331,7 +334,14 @@ with tab_gestion:
                 t_act = df_e[df_e["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False)].shape[0]
                 t_len = df_e[df_e["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df_e["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False)].shape[0]
                 t_par = df_e[df_e["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)].shape[0]
-                html_acc += f"<tr><td class='col-equipo'>{eq}</td><td>{t_act}</td><td>{t_len}</td><td>{t_par}</td><td style='font-weight:900;'>{t_tot}</td></tr>"
+                # Inyección de atributos data-equipo y clase celda-equipo-clic
+                html_acc += f"<tr>"
+                html_acc += f"<td class='col-equipo celda-equipo-clic' data-equipo='{eq}'>{eq}</td>"
+                html_acc += f"<td class='celda-equipo-clic' data-equipo='{eq}'>{t_act}</td>"
+                html_acc += f"<td class='celda-equipo-clic' data-equipo='{eq}'>{t_len}</td>"
+                html_acc += f"<td class='celda-equipo-clic' data-equipo='{eq}'>{t_par}</td>"
+                html_acc += f"<td class='celda-equipo-clic' data-equipo='{eq}' style='font-weight:900;'>{t_tot}</td>"
+                html_acc += f"</tr>"
             
             html_acc += "</tbody></table></div>"
             st.markdown(html_acc, unsafe_allow_html=True)
@@ -387,12 +397,12 @@ with tab_gestion:
                 for eq in equipos_lista:
                     df_e = df[df["Equipo"] == eq]
                     conteo_e = df_e['Año_Temp'].value_counts()
-                    html_anio_eq += f"<tr><td class='col-equipo'>{eq}</td>"
+                    html_anio_eq += f"<tr><td class='col-equipo celda-equipo-clic' data-equipo='{eq}'>{eq}</td>"
                     for a in list_años:
                         val = conteo_e.get(a, 0)
                         txt = str(val) if val > 0 else "-"
-                        html_anio_eq += f"<td>{txt}</td>"
-                    html_anio_eq += f"<td style='font-weight:900;'>{len(df_e)}</td></tr>"
+                        html_anio_eq += f"<td class='celda-equipo-clic' data-equipo='{eq}'>{txt}</td>"
+                    html_anio_eq += f"<td class='celda-equipo-clic' data-equipo='{eq}' style='font-weight:900;'>{len(df_e)}</td></tr>"
                 
                 html_anio_eq += "</tbody></table></div>"
                 st.markdown(html_anio_eq, unsafe_allow_html=True)
@@ -427,6 +437,16 @@ with tab_gestion:
     # VISTA CAPA 2 (DETALLE DE EQUIPO)
     # ==============================================================================
     elif st.session_state.capa_actual == 2:
+        
+        # SCRIPT INVISIBLE PARA FORZAR EL SCROLL ARRIBA AL ENTRAR A LA CAPA 2
+        components.html("""
+        <script>
+        setTimeout(function() {
+            window.parent.document.querySelector('.main').scrollTo({top: 0, behavior: 'instant'});
+        }, 100);
+        </script>
+        """, height=0, width=0)
+        
         eq_sel = st.session_state.equipo_sel
         df_eq = df[df["Equipo"] == eq_sel].copy()
         profesionales_lista = df_eq["Profesional"].value_counts().sort_values(ascending=False).index.tolist()
@@ -668,7 +688,7 @@ with tab_gestion:
                             st.info("No existen estados procesados.")
 
     # ==============================================================================
-    # INYECCIÓN JAVASCRIPT GLOBAL PARA CLICS (APLICA A CAPA 1 Y CAPA 2)
+    # INYECCIÓN JAVASCRIPT GLOBAL PARA CLICS E INTERACTIVIDAD AVANZADA
     # ==============================================================================
     components.html("""
     <script>
@@ -695,6 +715,21 @@ with tab_gestion:
             };
         });
 
+        // Clics Capa 1: Celdas de Equipo -> Navegación Directa a Capa 2 (Por Profesional)
+        const celdasEquipo = parentDOM.querySelectorAll('.celda-equipo-clic');
+        celdasEquipo.forEach(el => {
+            el.onclick = function() {
+                const equipoInfo = el.getAttribute('data-equipo');
+                const btns = Array.from(parentDOM.querySelectorAll('button'));
+                const btnVerReporte = btns.find(b => b.textContent.includes('Ver Reporte: ' + equipoInfo));
+                if(btnVerReporte) {
+                    // Guardamos una bandera en sessionStorage para que la Capa 2 sepa que debe abrir las pestañas de Profesionales
+                    window.sessionStorage.setItem('auto_open_profesional', 'true');
+                    btnVerReporte.click();
+                }
+            };
+        });
+
         // Clics Capa 2: Última Acción Equipo -> Por Profesional
         const tAccionesProf = parentDOM.querySelectorAll('.tarjeta-clic-acciones-prof');
         tAccionesProf.forEach(el => {
@@ -714,6 +749,16 @@ with tab_gestion:
                 if(profTabs.length > 1) profTabs[1].click();
             };
         });
+
+        // Sistema de auto-apertura de pestañas al venir desde una celda interactiva de la Capa 1
+        if(window.sessionStorage.getItem('auto_open_profesional') === 'true') {
+            setTimeout(function() {
+                const tabs = Array.from(parentDOM.querySelectorAll('[role="tab"]'));
+                const profTabs = tabs.filter(t => t.textContent.includes('Por Profesional'));
+                profTabs.forEach(t => t.click());
+                window.sessionStorage.removeItem('auto_open_profesional');
+            }, 300); // Pequeño retraso para dar tiempo a que Streamlit dibuje las pestañas
+        }
         
     }, 500);
     </script>
