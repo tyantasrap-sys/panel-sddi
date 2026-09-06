@@ -181,6 +181,8 @@ def crear_tarjeta(titulo, valor, color_borde, id_click=""):
     clase_clic = ""
     if id_click == "acciones": clase_clic = "tarjeta-clic tarjeta-clic-acciones"
     elif id_click == "anios": clase_clic = "tarjeta-clic tarjeta-clic-anios"
+    elif id_click == "acciones_prof": clase_clic = "tarjeta-clic tarjeta-clic-acciones-prof"
+    elif id_click == "anios_prof": clase_clic = "tarjeta-clic tarjeta-clic-anios-prof"
     
     st.markdown(f"""
     <div class="tarjeta-metrica {clase_clic}" style="border-bottom: 4px solid {color_borde};">
@@ -398,37 +400,6 @@ with tab_gestion:
             st.info("La columna J no está disponible en la base de datos actual para clasificar por años.")
 
         # ==============================================================================
-        # INYECCIÓN JAVASCRIPT SEGURA PARA HACER FUNCIONAR LOS CLICS DE LAS TARJETAS
-        # ==============================================================================
-        components.html("""
-        <script>
-        setTimeout(function() {
-            const parentDOM = window.parent.document;
-            
-            // Script para las tarjetas de "Última Acción"
-            const tAcciones = parentDOM.querySelectorAll('.tarjeta-clic-acciones');
-            tAcciones.forEach(el => {
-                el.onclick = function() {
-                    const tabs = Array.from(parentDOM.querySelectorAll('[role="tab"]'));
-                    const eqTabs = tabs.filter(t => t.textContent.includes('Comparativo por Equipos'));
-                    if(eqTabs.length > 0) eqTabs[0].click();
-                };
-            });
-
-            // Script para los números de "Años"
-            const tAnios = parentDOM.querySelectorAll('.tarjeta-clic-anios');
-            tAnios.forEach(el => {
-                el.onclick = function() {
-                    const tabs = Array.from(parentDOM.querySelectorAll('[role="tab"]'));
-                    const eqTabs = tabs.filter(t => t.textContent.includes('Comparativo por Equipos'));
-                    if(eqTabs.length > 1) eqTabs[1].click();
-                };
-            });
-        }, 500);
-        </script>
-        """, height=0, width=0)
-
-        # ==============================================================================
         # BLOQUE 3: EQUIPOS DE TRABAJO
         # ==============================================================================
         st.markdown("<hr style='border:none; border-top:1px solid #E0E6ED; margin:15px 0 20px 0;'>", unsafe_allow_html=True)
@@ -451,21 +422,125 @@ with tab_gestion:
                     ir_a_capa(2, equipo=eq)
                     st.rerun()
 
+    # ==============================================================================
+    # VISTA CAPA 2 (DETALLE DE EQUIPO)
+    # ==============================================================================
     elif st.session_state.capa_actual == 2:
         eq_sel = st.session_state.equipo_sel
-        df_eq = df[df["Equipo"] == eq_sel]
+        df_eq = df[df["Equipo"] == eq_sel].copy()
+        profesionales_lista = df_eq["Profesional"].value_counts().sort_values(ascending=False).index.tolist()
+        
         mostrar_encabezado(f"Reporte Dinámico: {eq_sel}", "Evaluación detallada de estados y carga por especialista.", mostrar_volver=True)
 
-        k1, k2, k3, k4 = st.columns(4)
-        with k1: crear_tarjeta("Total Equipo", len(df_eq), "#3498DB")
-        with k2: crear_tarjeta("🟢 Trámite Activo (1-3 semanas)", df_eq[df_eq["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False)].shape[0], "#2ECC71")
-        with k3: crear_tarjeta("🟡 Flujo Lento (1 a 5 meses)", df_eq[df_eq["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df_eq["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False)].shape[0], "#F1C40F")
-        with k4: crear_tarjeta("🔴 Paralizados (+6 meses)", df_eq[df_eq["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)].shape[0], "#E74C3C")
+        # ------------------------------------------------------------------------------
+        # CAPA 2 - BLOQUE 1: ÚLTIMA ACCIÓN REALIZADA
+        # ------------------------------------------------------------------------------
+        st.markdown("<h4 style='color:#2C3E50; margin-bottom:5px;'>📌 Expedientes por última acción realizada</h4>", unsafe_allow_html=True)
+        t_acc_gen_prof, t_acc_prof = st.tabs(["📊 Resumen General", "👨‍💼 Por Profesional"])
+        
+        with t_acc_gen_prof:
+            c_izq, k1, k2, k3, k4, c_der = st.columns([1, 3, 3, 3, 3, 1])
+            with k1: crear_tarjeta("Total Equipo", len(df_eq), "#3498DB", id_click="acciones_prof")
+            with k2: crear_tarjeta("🟢 Trámite Activo (1-3 semanas)", df_eq[df_eq["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False)].shape[0], "#2ECC71", id_click="acciones_prof")
+            with k3: crear_tarjeta("🟡 Flujo Lento (1 a 5 meses)", df_eq[df_eq["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df_eq["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False)].shape[0], "#F1C40F", id_click="acciones_prof")
+            with k4: crear_tarjeta("🔴 Paralizados (+6 meses)", df_eq[df_eq["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)].shape[0], "#E74C3C", id_click="acciones_prof")
 
+        with t_acc_prof:
+            html_acc_p = """
+            <div style="overflow-x: auto; margin: 10px auto 20px auto; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.04); border: 1px solid #BDC3C7; background-color: #FFFFFF;">
+                <table class="tabla-matricial">
+                    <thead>
+                        <tr>
+                            <th style="text-align: left; padding-left: 15px;">PROFESIONAL RESPONSABLE</th>
+                            <th style="background-color: #27AE60;">TRÁMITE ACTIVO<br><span style="font-size:9px; font-weight:400;">(1-3 SEMANAS)</span></th>
+                            <th style="background-color: #F39C12;">FLUJO LENTO<br><span style="font-size:9px; font-weight:400;">(1 A 5 MESES)</span></th>
+                            <th style="background-color: #C0392B;">PARALIZADOS<br><span style="font-size:9px; font-weight:400;">(+6 MESES)</span></th>
+                            <th style="background-color: #1F618D;">TOTAL EXP.</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            """
+            for prof in profesionales_lista:
+                df_pr = df_eq[df_eq["Profesional"] == prof]
+                p_tot = len(df_pr)
+                p_act = df_pr[df_pr["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False)].shape[0]
+                p_len = df_pr[df_pr["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df_pr["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False)].shape[0]
+                p_par = df_pr[df_pr["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)].shape[0]
+                html_acc_p += f"<tr><td class='col-equipo'>{prof}</td><td>{p_act}</td><td>{p_len}</td><td>{p_par}</td><td style='font-weight:900;'>{p_tot}</td></tr>"
+            
+            html_acc_p += "</tbody></table></div>"
+            st.markdown(html_acc_p, unsafe_allow_html=True)
+
+        # ------------------------------------------------------------------------------
+        # CAPA 2 - BLOQUE 2: AÑO DE CREACIÓN
+        # ------------------------------------------------------------------------------
+        st.markdown("<hr style='border:none; border-top:1px dashed #E0E6ED; margin:25px 0 15px 0;'>", unsafe_allow_html=True)
+        st.markdown("<h4 style='color:#2C3E50; margin-bottom:5px;'>📅 Expedientes por año de creación</h4>", unsafe_allow_html=True)
+        
+        t_anio_gen_prof, t_anio_prof = st.tabs(["📊 Resumen General", "👨‍💼 Por Profesional"])
+        
+        if len(df.columns) >= 10:
+            df_eq['Año_Temp'] = df_eq[df_eq.columns[9]].astype(str).str.extract(r'((?:19|20)\d{2})')[0].fillna("S/F")
+            
+            with t_anio_gen_prof:
+                conteo_años_eq = df_eq['Año_Temp'].value_counts().sort_index(ascending=True)
+
+                html_tabla_eq = f"""
+                <div style="overflow-x: auto; margin: 10px auto 20px auto; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.04); border: 1px solid #BDC3C7; background-color: #FFFFFF;">
+                    <table class="tabla-matricial">
+                        <thead>
+                            <tr>
+                                <th colspan="{len(conteo_años_eq)}" style="padding: 6px; letter-spacing: 1px; text-transform: uppercase;">
+                                    TOTAL EXPEDIENTES DEL EQUIPO POR AÑO: {len(df_eq)}
+                                </th>
+                            </tr>
+                            <tr>
+                """
+                for año in conteo_años_eq.index:
+                    html_tabla_eq += f"<th class='header-secundario'>{año}</th>"
+                html_tabla_eq += "</tr></thead><tbody><tr>"
+                
+                for cantidad in conteo_años_eq.values:
+                    html_tabla_eq += f"<td class='tarjeta-clic tarjeta-clic-anios-prof'>{cantidad}</td>"
+                html_tabla_eq += "</tr></tbody></table></div>"
+                st.markdown(html_tabla_eq, unsafe_allow_html=True)
+
+            with t_anio_prof:
+                list_años_eq = df_eq['Año_Temp'].value_counts().sort_index(ascending=True).index.tolist()
+                
+                html_anio_p = """
+                <div style="overflow-x: auto; margin: 10px auto 20px auto; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.04); border: 1px solid #BDC3C7; background-color: #FFFFFF;">
+                    <table class="tabla-matricial">
+                        <thead>
+                            <tr>
+                                <th style="text-align: left; padding-left: 15px;">PROFESIONAL RESPONSABLE</th>
+                """
+                for a in list_años_eq:
+                    html_anio_p += f"<th>{a}</th>"
+                html_anio_p += "<th style='background-color: #1F618D;'>TOTAL</th></tr></thead><tbody>"
+                
+                for prof in profesionales_lista:
+                    df_pr = df_eq[df_eq["Profesional"] == prof]
+                    conteo_pr = df_pr['Año_Temp'].value_counts()
+                    html_anio_p += f"<tr><td class='col-equipo'>{prof}</td>"
+                    for a in list_años_eq:
+                        val = conteo_pr.get(a, 0)
+                        txt = str(val) if val > 0 else "-"
+                        html_anio_p += f"<td>{txt}</td>"
+                    html_anio_p += f"<td style='font-weight:900;'>{len(df_pr)}</td></tr>"
+                
+                html_anio_p += "</tbody></table></div>"
+                st.markdown(html_anio_p, unsafe_allow_html=True)
+                
+        else:
+            st.info("La columna J no está disponible para clasificar por años.")
+
+        # ------------------------------------------------------------------------------
+        # CAPA 2 - BLOQUE 3: RELACIÓN DE PROFESIONALES (EXPANSORES)
+        # ------------------------------------------------------------------------------
         st.markdown("<hr style='border:none; border-top:1px solid #E0E6ED; margin:20px 0;'><h4 style='color:#2C3E50;'>👨‍💼 Relación de Profesionales</h4>", unsafe_allow_html=True)
-        profesionales = df_eq["Profesional"].value_counts().sort_values(ascending=False).index.tolist()
 
-        for prof in profesionales:
+        for prof in profesionales_lista:
             df_p = df_eq[df_eq["Profesional"] == prof]
             
             df_sddi = df_p[df_p["Tipo Doc"].astype(str).str.contains("generado", case=False, na=False)]
@@ -548,9 +623,9 @@ with tab_gestion:
                     else:
                         st.info("No hay expedientes en esta categoría.")
         
-        # ==============================================================================
-        # SEGUIMIENTO TÍTULOS SUNARP (RESTRINGIDO EXCLUSIVAMENTE AL EQUIPO TRANSVERSAL)
-        # ==============================================================================
+        # ------------------------------------------------------------------------------
+        # CAPA 2 - BLOQUE 4: SEGUIMIENTO TÍTULOS SUNARP (SOLO TRANSVERSAL)
+        # ------------------------------------------------------------------------------
         if eq_sel == "Transversal":
             st.markdown("<hr style='border:none; border-top:1px solid #E0E6ED; margin:40px 0 20px 0;'><h4 style='color:#2C3E50;'>🏢 Seguimiento Títulos SUNARP</h4>", unsafe_allow_html=True)
             
@@ -590,6 +665,58 @@ with tab_gestion:
                                             st.rerun()
                         else:
                             st.info("No existen estados procesados.")
+
+    # ==============================================================================
+    # INYECCIÓN JAVASCRIPT GLOBAL PARA CLICS (APLICA A CAPA 1 Y CAPA 2)
+    # ==============================================================================
+    components.html("""
+    <script>
+    setTimeout(function() {
+        const parentDOM = window.parent.document;
+        
+        // Clics Capa 1: Última Acción General -> Por Equipos
+        const tAcciones = parentDOM.querySelectorAll('.tarjeta-clic-acciones');
+        tAcciones.forEach(el => {
+            el.onclick = function() {
+                const tabs = Array.from(parentDOM.querySelectorAll('[role="tab"]'));
+                const eqTabs = tabs.filter(t => t.textContent.includes('Comparativo por Equipos'));
+                if(eqTabs.length > 0) eqTabs[0].click();
+            };
+        });
+
+        // Clics Capa 1: Años General -> Por Equipos
+        const tAnios = parentDOM.querySelectorAll('.tarjeta-clic-anios');
+        tAnios.forEach(el => {
+            el.onclick = function() {
+                const tabs = Array.from(parentDOM.querySelectorAll('[role="tab"]'));
+                const eqTabs = tabs.filter(t => t.textContent.includes('Comparativo por Equipos'));
+                if(eqTabs.length > 1) eqTabs[1].click();
+            };
+        });
+
+        // Clics Capa 2: Última Acción Equipo -> Por Profesional
+        const tAccionesProf = parentDOM.querySelectorAll('.tarjeta-clic-acciones-prof');
+        tAccionesProf.forEach(el => {
+            el.onclick = function() {
+                const tabs = Array.from(parentDOM.querySelectorAll('[role="tab"]'));
+                const profTabs = tabs.filter(t => t.textContent.includes('Por Profesional'));
+                if(profTabs.length > 0) profTabs[0].click();
+            };
+        });
+
+        // Clics Capa 2: Años Equipo -> Por Profesional
+        const tAniosProf = parentDOM.querySelectorAll('.tarjeta-clic-anios-prof');
+        tAniosProf.forEach(el => {
+            el.onclick = function() {
+                const tabs = Array.from(parentDOM.querySelectorAll('[role="tab"]'));
+                const profTabs = tabs.filter(t => t.textContent.includes('Por Profesional'));
+                if(profTabs.length > 1) profTabs[1].click();
+            };
+        });
+        
+    }, 500);
+    </script>
+    """, height=0, width=0)
 
 # ==============================================================================
 # CONTENIDO DE LA PESTAÑA 2: AVANCE DE PRODUCCIÓN (ENRUTAMIENTO NATIVO Y SEGURO)
