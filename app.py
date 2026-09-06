@@ -110,10 +110,10 @@ html, body, [class*="css"], .stApp { font-family: 'Inter', sans-serif !important
 button[kind="primary"] { background-color: #2980B9 !important; border-color: #2980B9 !important; color: white !important; font-weight: 700 !important; }
 button[kind="primary"]:hover { background-color: #1A5276 !important; border-color: #1A5276 !important; }
 
-[data-testid="stTabs"] [data-baseweb="tab-list"] { gap: 6px !important; border-bottom: 2px solid #BDC3C7 !important; }
+[data-testid="stTabs"] [data-baseweb="tab-list"] { gap: 6px !important; border-bottom: 2px solid #BDC3C7 !important; margin-bottom: 10px !important; }
 [data-testid="stTabs"] [data-baseweb="tab-highlight"] { display: none !important; }
-[data-testid="stTabs"] [data-baseweb="tab"] { background-color: #EAECEE !important; border-radius: 8px 8px 0px 0px !important; border: 1px solid #BDC3C7 !important; border-bottom: none !important; padding: 12px 24px !important; margin: 0 !important; transition: all 0.2s ease !important; }
-[data-testid="stTabs"] [data-baseweb="tab"] p { font-size: 18px !important; font-weight: 600 !important; color: #7F8C8D !important; }
+[data-testid="stTabs"] [data-baseweb="tab"] { background-color: #EAECEE !important; border-radius: 8px 8px 0px 0px !important; border: 1px solid #BDC3C7 !important; border-bottom: none !important; padding: 10px 20px !important; margin: 0 !important; transition: all 0.2s ease !important; }
+[data-testid="stTabs"] [data-baseweb="tab"] p { font-size: 16px !important; font-weight: 600 !important; color: #7F8C8D !important; }
 [data-testid="stTabs"] [data-baseweb="tab"]:hover { background-color: #D5DBDB !important; }
 [data-testid="stTabs"] [data-baseweb="tab"][aria-selected="true"] { background-color: #E8F4F8 !important; border-top: 5px solid #2ECC71 !important; border-bottom: 3px solid #E8F4F8 !important; margin-bottom: -2px !important; z-index: 99 !important; }
 [data-testid="stTabs"] [data-baseweb="tab"][aria-selected="true"] p { color: #2980B9 !important; font-weight: 900 !important; }
@@ -123,12 +123,18 @@ footer, #MainMenu, [data-testid="stDecoration"], [data-testid="stToolbar"] { dis
 h1 a svg, h2 a svg, h3 a svg { display: none !important; } 
 a[href*="github.com"], a[href*="streamlit.io"] { pointer-events: none !important; display: none !important; }
 
-/* SE AJUSTÓ LA TARJETA METRICA PARA SER MÁS COMPACTA */
 .tarjeta-metrica { background-color: #FFFFFF; padding: 6px 10px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.04); margin-bottom: 12px; text-align: center; height: 68px !important; display: flex; flex-direction: column; justify-content: center; align-items: center; }
 .tarjeta-titulo { color: #7F8C8D; font-size: 10px; margin: 0; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; min-height: 18px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px; line-height: 1.1; }
 .tarjeta-valor { color: #2C3E50; font-size: 24px; margin: 0 !important; font-weight: 700; line-height: 1; }
 .tarjeta-equipo { background-color: #FFFFFF; padding: 12px 10px; border-radius: 10px; border-top: 4px solid #2980B9; box-shadow: 0 3px 8px rgba(0,0,0,0.04); text-align: center; margin-bottom: 10px; height: 120px !important; display: flex; flex-direction: column; justify-content: center; }
 div[data-testid="stExpander"] summary p { font-size: 14px !important; font-weight: 400 !important; color: #2C3E50 !important; }
+
+/* ESTILOS GLOBALES PARA TABLAS HTML MATRICIALES */
+.tabla-matricial { width: 100%; border-collapse: collapse; font-family: 'Inter', sans-serif; }
+.tabla-matricial th { background-color: #2980B9; color: #FFFFFF; text-align: center; padding: 8px; font-size: 12px; font-weight: 700; border: 1px solid #1A5276; }
+.tabla-matricial th.header-secundario { background-color: #F8F9F9; color: #7F8C8D; border-bottom: 2px solid #BDC3C7; border-color: #E0E6ED; }
+.tabla-matricial td { background-color: #FFFFFF; color: #2C3E50; text-align: center; padding: 10px; font-size: 15px; font-weight: 700; border: 1px solid #E0E6ED; }
+.tabla-matricial td.col-equipo { background-color: #EAECEE; text-align: left; padding-left: 15px; font-weight: 800; color: #1A252F; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -272,71 +278,125 @@ with tab_gestion:
     except Exception as e:
         st.error("Error al conectar con la base de datos de Gestión.")
         st.stop()
+        
+    equipos_lista = sorted(df["Equipo"].dropna().astype(str).unique().tolist())
 
     if st.session_state.capa_actual == 1:
         mostrar_encabezado("Gestión de Expedientes SDDI", "Gestión y seguimiento de expedientes en trámite a nivel nacional.", mostrar_volver=False)
 
-        # BLOQUE 1: ÚLTIMA ACCIÓN REALIZADA
-        st.markdown("<h4 style='color:#2C3E50; margin-bottom:15px;'>📌 Expedientes por última acción realizada</h4>", unsafe_allow_html=True)
-        m1, m2, m3, m4 = st.columns(4)
-        with m1: crear_tarjeta("📁 Total en Trámite", len(df), "#3498DB")
-        with m2: crear_tarjeta("🟢 Trámite Activo (1-3 semanas)", df[df["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False)].shape[0], "#2ECC71")
-        with m3: crear_tarjeta("🟡 Flujo Lento (1 a 5 meses)", df[df["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False)].shape[0], "#F1C40F")
-        with m4: crear_tarjeta("🔴 Paralizados (+6 meses)", df[df["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)].shape[0], "#E74C3C")
-
-        # BLOQUE 2: AÑO DE CREACIÓN (Tabla Horizontal Estilizada y Compacta)
-        st.markdown("<hr style='border:none; border-top:1px dashed #E0E6ED; margin:25px 0 15px 0;'>", unsafe_allow_html=True)
-        st.markdown("<h4 style='color:#2C3E50; margin-bottom:15px;'>📅 Expedientes por año de creación</h4>", unsafe_allow_html=True)
+        # ==============================================================================
+        # BLOQUE 1: ÚLTIMA ACCIÓN REALIZADA (C/ PESTAÑAS Y AJUSTE DE ANCHO)
+        # ==============================================================================
+        st.markdown("<h4 style='color:#2C3E50; margin-bottom:5px;'>📌 Expedientes por última acción realizada</h4>", unsafe_allow_html=True)
+        tab_acc_gen, tab_acc_eq = st.tabs(["📊 Resumen General", "🏢 Comparativo por Equipos"])
         
-        if len(df.columns) >= 10:
-            total_exp = len(df)
-            col_j = df.columns[9]
-            años = df[col_j].astype(str).str.extract(r'((?:19|20)\d{2})')[0].fillna("Sin Fecha")
-            conteo_años = años.value_counts().sort_index(ascending=True)
-            
-            html_tabla = f"""
-            <div style="overflow-x: auto; margin: 0 auto 25px auto; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.04); border: 1px solid #BDC3C7; background-color: #FFFFFF;">
-                <table style="width: 100%; border-collapse: collapse; font-family: 'Inter', sans-serif;">
+        with tab_acc_gen:
+            # Las columnas de los bordes (1) actúan como espaciadores para compactar las tarjetas centrales (3)
+            c_izq, m1, m2, m3, m4, c_der = st.columns([1, 3, 3, 3, 3, 1])
+            with m1: crear_tarjeta("📁 Total en Trámite", len(df), "#3498DB")
+            with m2: crear_tarjeta("🟢 Trámite Activo (1-3 semanas)", df[df["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False)].shape[0], "#2ECC71")
+            with m3: crear_tarjeta("🟡 Flujo Lento (1 a 5 meses)", df[df["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False)].shape[0], "#F1C40F")
+            with m4: crear_tarjeta("🔴 Paralizados (+6 meses)", df[df["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)].shape[0], "#E74C3C")
+
+        with tab_acc_eq:
+            html_acc = """
+            <div style="overflow-x: auto; margin: 10px auto 20px auto; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.04); border: 1px solid #BDC3C7; background-color: #FFFFFF;">
+                <table class="tabla-matricial">
                     <thead>
                         <tr>
-                            <th colspan="{len(conteo_años)}" style="background-color: #2980B9; color: #FFFFFF; text-align: center; padding: 6px; font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;">
-                                TOTAL EXPEDIENTES POR AÑO: {total_exp}
-                            </th>
-                        </tr>
-                        <tr>
-            """
-            
-            for año in conteo_años.index:
-                html_tabla += f"<th style='background-color: #F8F9F9; color: #7F8C8D; text-align: center; padding: 5px 10px; font-size: 12px; font-weight: 700; border: 1px solid #E0E6ED; border-bottom: 2px solid #BDC3C7;'>{año}</th>"
-                
-            html_tabla += """
+                            <th style="text-align: left; padding-left: 15px;">EQUIPO DE TRABAJO</th>
+                            <th style="background-color: #1F618D;">TOTAL EXP.</th>
+                            <th style="background-color: #27AE60;">TRÁMITE ACTIVO</th>
+                            <th style="background-color: #F39C12;">FLUJO LENTO</th>
+                            <th style="background-color: #C0392B;">PARALIZADOS</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr>
             """
+            for eq in equipos_lista:
+                df_e = df[df["Equipo"] == eq]
+                t_tot = len(df_e)
+                t_act = df_e[df_e["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False)].shape[0]
+                t_len = df_e[df_e["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df_e["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False)].shape[0]
+                t_par = df_e[df_e["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)].shape[0]
+                html_acc += f"<tr><td class='col-equipo'>{eq}</td><td>{t_tot}</td><td>{t_act}</td><td>{t_len}</td><td>{t_par}</td></tr>"
             
-            for cantidad in conteo_años.values:
-                html_tabla += f"<td style='background-color: #FFFFFF; color: #2C3E50; text-align: center; padding: 8px 10px; font-size: 16px; font-weight: 900; border: 1px solid #E0E6ED;'>{cantidad}</td>"
+            html_acc += "</tbody></table></div>"
+            st.markdown(html_acc, unsafe_allow_html=True)
+
+
+        # ==============================================================================
+        # BLOQUE 2: AÑO DE CREACIÓN (C/ PESTAÑAS)
+        # ==============================================================================
+        st.markdown("<hr style='border:none; border-top:1px dashed #E0E6ED; margin:25px 0 15px 0;'>", unsafe_allow_html=True)
+        st.markdown("<h4 style='color:#2C3E50; margin-bottom:5px;'>📅 Expedientes por año de creación</h4>", unsafe_allow_html=True)
+        tab_anio_gen, tab_anio_eq = st.tabs(["📊 Resumen General", "🏢 Comparativo por Equipos"])
+        
+        if len(df.columns) >= 10:
+            df['Año_Temp'] = df[df.columns[9]].astype(str).str.extract(r'((?:19|20)\d{2})')[0].fillna("S/F")
+            
+            with tab_anio_gen:
+                conteo_años = df['Año_Temp'].value_counts().sort_index(ascending=True)
+                html_tabla = f"""
+                <div style="overflow-x: auto; margin: 10px auto 20px auto; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.04); border: 1px solid #BDC3C7; background-color: #FFFFFF;">
+                    <table class="tabla-matricial">
+                        <thead>
+                            <tr>
+                                <th colspan="{len(conteo_años)}" style="padding: 6px; letter-spacing: 1px; text-transform: uppercase;">
+                                    TOTAL EXPEDIENTES POR AÑO: {len(df)}
+                                </th>
+                            </tr>
+                            <tr>
+                """
+                for año in conteo_años.index:
+                    html_tabla += f"<th class='header-secundario'>{año}</th>"
+                html_tabla += "</tr></thead><tbody><tr>"
                 
-            html_tabla += """
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-            """
-            st.markdown(html_tabla, unsafe_allow_html=True)
+                for cantidad in conteo_años.values:
+                    html_tabla += f"<td>{cantidad}</td>"
+                html_tabla += "</tr></tbody></table></div>"
+                st.markdown(html_tabla, unsafe_allow_html=True)
+
+            with tab_anio_eq:
+                list_años = df['Año_Temp'].value_counts().sort_index(ascending=True).index.tolist()
+                
+                html_anio_eq = """
+                <div style="overflow-x: auto; margin: 10px auto 20px auto; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.04); border: 1px solid #BDC3C7; background-color: #FFFFFF;">
+                    <table class="tabla-matricial">
+                        <thead>
+                            <tr>
+                                <th style="text-align: left; padding-left: 15px;">EQUIPO DE TRABAJO</th>
+                                <th style="background-color: #1F618D;">TOTAL</th>
+                """
+                for a in list_años:
+                    html_anio_eq += f"<th>{a}</th>"
+                html_anio_eq += "</tr></thead><tbody>"
+                
+                for eq in equipos_lista:
+                    df_e = df[df["Equipo"] == eq]
+                    conteo_e = df_e['Año_Temp'].value_counts()
+                    html_anio_eq += f"<tr><td class='col-equipo'>{eq}</td><td style='font-weight:900;'>{len(df_e)}</td>"
+                    for a in list_años:
+                        val = conteo_e.get(a, 0)
+                        txt = str(val) if val > 0 else "-"
+                        html_anio_eq += f"<td>{txt}</td>"
+                    html_anio_eq += "</tr>"
+                
+                html_anio_eq += "</tbody></table></div>"
+                st.markdown(html_anio_eq, unsafe_allow_html=True)
+                
         else:
             st.info("La columna J no está disponible en la base de datos actual para clasificar por años.")
 
+        # ==============================================================================
         # BLOQUE 3: EQUIPOS DE TRABAJO
+        # ==============================================================================
         st.markdown("<hr style='border:none; border-top:1px solid #E0E6ED; margin:15px 0 20px 0;'>", unsafe_allow_html=True)
         st.markdown("<h4 style='color:#2C3E50; text-align:center;'>Carga General por Equipos de Trabajo</h4><br>", unsafe_allow_html=True)
 
-        equipos = sorted(df["Equipo"].dropna().astype(str).unique().tolist())
-        cols_eq = st.columns(min(len(equipos), 4))
+        cols_eq = st.columns(min(len(equipos_lista), 4))
 
-        for idx, eq in enumerate(equipos):
+        for idx, eq in enumerate(equipos_lista):
             with cols_eq[idx % 4]:
                 df_eq = df[df["Equipo"] == eq]
                 criticos = df_eq[df_eq["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)].shape[0]
@@ -356,7 +416,6 @@ with tab_gestion:
         df_eq = df[df["Equipo"] == eq_sel]
         mostrar_encabezado(f"Reporte Dinámico: {eq_sel}", "Evaluación detallada de estados y carga por especialista.", mostrar_volver=True)
 
-        # LEYENDAS INCORPORADAS EN CAPA 2
         k1, k2, k3, k4 = st.columns(4)
         with k1: crear_tarjeta("Total Equipo", len(df_eq), "#3498DB")
         with k2: crear_tarjeta("🟢 Trámite Activo (1-3 semanas)", df_eq[df_eq["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False)].shape[0], "#2ECC71")
@@ -498,7 +557,6 @@ with tab_gestion:
 with tab_produccion:
     st.markdown("<br><br><h2 style='text-align: center; color: #2C3E50;'>Estamos trabajando para integrar esta información, por lo pronto ingrese a:</h2><br>", unsafe_allow_html=True)
     
-    # Renderizado Defensivo: Uso de st.link_button para evitar bloqueos del DOM/Navegador en la Nube
     col_izq, col_centro, col_der = st.columns([3, 4, 3])
     
     with col_centro:
