@@ -107,26 +107,32 @@ def mostrar_modal_detalle(proc, anio, df_base):
     st.markdown(f"<h5 style='color:#2980B9; margin-top:0;'>Procedimiento: {proc} | Año: {anio}</h5>", unsafe_allow_html=True)
     
     if len(df_base.columns) >= 13:
-        # Extraemos las columnas exactas solicitadas más la columna F para calcular el estado
-        # A(0)=Expediente, F(5)=Trazabilidad, H(7)=Profesional, J(9)=Año, K(10)=Procedimiento, L(11)=Administrado, M(12)=Estado
-        df_modal = df_base.iloc[:, [0, 7, 9, 10, 11, 12, 5]].copy()
-        df_modal.columns = ["Expediente", "Profesional", "Año", "Procedimiento", "Administrado", "Estado", "Trazabilidad_Oculta"]
+        # Construimos el DataFrame de forma híbrida para evitar desfases del CSV
+        df_modal = pd.DataFrame()
+        df_modal["Expediente"] = df_base.iloc[:, 0]
+        df_modal["Profesional"] = df_base.iloc[:, 7]
+        df_modal["Año"] = df_base.iloc[:, 9]
+        df_modal["Procedimiento"] = df_base.iloc[:, 10]
+        df_modal["Administrado"] = df_base.iloc[:, 11]
+        df_modal["Estado"] = df_base.iloc[:, 12]
         
-        # Filtramos primero para trabajar con menos datos
+        # Extracción segura de la columna Trazabilidad usando su nombre exacto
+        if "Trazabilidad" in df_base.columns:
+            df_modal["Trazabilidad_Oculta"] = df_base["Trazabilidad"]
+        else:
+            df_modal["Trazabilidad_Oculta"] = df_base.iloc[:, 5]
+            
+        # Filtramos los datos del clic
         if proc != 'TOTAL':
             df_modal = df_modal[df_modal["Procedimiento"].astype(str).str.strip().str.upper() == proc.upper()]
         if anio != 'TOTAL':
             df_modal = df_modal[df_modal["Año"].astype(str) == str(anio)]
             
         # REGLA DE ANONIMIZACIÓN (Protección de Datos Personales)
-        # 1. Identificar si es compraventa
         mask_compraventa = df_modal["Procedimiento"].astype(str).str.upper().str.contains("COMPRAVENTA")
-        
-        # 2. Identificar si es entidad jurídica/estatal
         palabras_entidad = "MUNICIPALIDAD|GOBIERNO|MINISTERIO|S\.A\.|S\.A\.C\.|S\.R\.L\.|E\.I\.R\.L\.|ASOCIACION|EMPRESA|COMUNIDAD|CONSORCIO|DIRECCION|SUPERINTENDENCIA|UNIVERSIDAD|COOPERATIVA|SINDICATO|PROYECTO|IGLESIA|COMITE|JUNTA"
         mask_juridica = df_modal["Administrado"].astype(str).str.upper().str.contains(palabras_entidad, na=False)
         
-        # 3. Reemplazar solo si es Compraventa Y NO es entidad jurídica
         mask_ocultar = mask_compraventa & ~mask_juridica
         df_modal.loc[mask_ocultar, "Administrado"] = "PERSONA NATURAL"
         
@@ -189,7 +195,7 @@ a[href*="github.com"], a[href*="streamlit.io"] { pointer-events: none !important
 .tarjeta-equipo { background-color: #FFFFFF; padding: 12px 10px; border-radius: 10px; border-top: 4px solid #2980B9; box-shadow: 0 3px 8px rgba(0,0,0,0.04); text-align: center; margin-bottom: 10px; height: 120px !important; display: flex; flex-direction: column; justify-content: center; }
 div[data-testid="stExpander"] summary p { font-size: 14px !important; font-weight: 400 !important; color: #2C3E50 !important; }
 
-/* ESTILOS GLOBALES PARA TABLAS HTML MATRICIALES */
+/* ESTILOS GLOBALES PARA TABLAS HTML MATRICIALES (COMPACTADAS Y PROPORCIONALES) */
 .tabla-matricial { width: 100%; min-width: 750px; border-collapse: collapse; font-family: 'Inter', sans-serif; }
 .tabla-matricial th { background-color: #2980B9; color: #FFFFFF; text-align: center; padding: 6px 8px; font-size: 11px; font-weight: 700; border: 1px solid #1A5276; text-transform: uppercase; line-height: 1.2; }
 .tabla-matricial th.header-secundario { background-color: #F8F9F9; color: #7F8C8D; border-bottom: 2px solid #BDC3C7; border-color: #E0E6ED; font-size: 12px; }
@@ -452,6 +458,7 @@ with tab_gestion:
                 
             with tab_anio_proc:
                 list_años = df['Año_Temp'].value_counts().sort_index(ascending=True).index.tolist()
+                
                 procedimientos_ordenados = df['Procedimiento_Temp'].value_counts().index.tolist()
                 
                 html_anio_proc = """
