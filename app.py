@@ -4,6 +4,7 @@ import logging
 import pandas as pd
 import streamlit as st
 import gspread
+import streamlit.components.v1 as components
 from google.oauth2.service_account import Credentials
 
 # ==============================================================================
@@ -177,17 +178,12 @@ def mostrar_encabezado(titulo, subtitulo, mostrar_volver=False):
         st.markdown(html_encabezado, unsafe_allow_html=True)
 
 def crear_tarjeta(titulo, valor, color_borde, id_click=""):
-    js_script = ""
-    # Inyección de código JS para buscar los botones de las pestañas en el navegador y forzar el salto
-    if id_click == "acciones":
-        js_script = """onclick="let tabs=Array.from(window.parent.document.querySelectorAll('[role=\\'tab\\']')).filter(el=>el.innerText.includes('Comparativo por Equipos')); if(tabs.length>0) tabs[0].click();" """
-    elif id_click == "anios":
-        js_script = """onclick="let tabs=Array.from(window.parent.document.querySelectorAll('[role=\\'tab\\']')).filter(el=>el.innerText.includes('Comparativo por Equipos')); if(tabs.length>1) tabs[1].click();" """
-        
-    clase_clic = "tarjeta-clic" if id_click else ""
+    clase_clic = ""
+    if id_click == "acciones": clase_clic = "tarjeta-clic tarjeta-clic-acciones"
+    elif id_click == "anios": clase_clic = "tarjeta-clic tarjeta-clic-anios"
     
     st.markdown(f"""
-    <div class="tarjeta-metrica {clase_clic}" style="border-bottom: 4px solid {color_borde};" {js_script}>
+    <div class="tarjeta-metrica {clase_clic}" style="border-bottom: 4px solid {color_borde};">
         <div class="tarjeta-titulo">{titulo}</div>
         <div class="tarjeta-valor">{valor}</div>
     </div>
@@ -299,13 +295,12 @@ with tab_gestion:
         mostrar_encabezado("Gestión de Expedientes SDDI", "Gestión y seguimiento de expedientes en trámite a nivel nacional.", mostrar_volver=False)
 
         # ==============================================================================
-        # BLOQUE 1: ÚLTIMA ACCIÓN REALIZADA (C/ PESTAÑAS Y AJUSTE DE ANCHO)
+        # BLOQUE 1: ÚLTIMA ACCIÓN REALIZADA 
         # ==============================================================================
         st.markdown("<h4 style='color:#2C3E50; margin-bottom:5px;'>📌 Expedientes por última acción realizada</h4>", unsafe_allow_html=True)
         tab_acc_gen, tab_acc_eq = st.tabs(["📊 Resumen General", "🏢 Comparativo por Equipos"])
         
         with tab_acc_gen:
-            # Las columnas de los bordes (1) actúan como espaciadores para compactar las tarjetas centrales (3)
             c_izq, m1, m2, m3, m4, c_der = st.columns([1, 3, 3, 3, 3, 1])
             with m1: crear_tarjeta("📁 Total en Trámite", len(df), "#3498DB", id_click="acciones")
             with m2: crear_tarjeta("🟢 Trámite Activo (1-3 semanas)", df[df["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False)].shape[0], "#2ECC71", id_click="acciones")
@@ -340,7 +335,7 @@ with tab_gestion:
 
 
         # ==============================================================================
-        # BLOQUE 2: AÑO DE CREACIÓN (C/ PESTAÑAS)
+        # BLOQUE 2: AÑO DE CREACIÓN
         # ==============================================================================
         st.markdown("<hr style='border:none; border-top:1px dashed #E0E6ED; margin:25px 0 15px 0;'>", unsafe_allow_html=True)
         st.markdown("<h4 style='color:#2C3E50; margin-bottom:5px;'>📅 Expedientes por año de creación</h4>", unsafe_allow_html=True)
@@ -351,7 +346,6 @@ with tab_gestion:
             
             with tab_anio_gen:
                 conteo_años = df['Año_Temp'].value_counts().sort_index(ascending=True)
-                js_anios = """onclick="let tabs=Array.from(window.parent.document.querySelectorAll('[role=\\'tab\\']')).filter(el=>el.innerText.includes('Comparativo por Equipos')); if(tabs.length>1) tabs[1].click();" """
 
                 html_tabla = f"""
                 <div style="overflow-x: auto; margin: 10px auto 20px auto; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.04); border: 1px solid #BDC3C7; background-color: #FFFFFF;">
@@ -369,7 +363,7 @@ with tab_gestion:
                 html_tabla += "</tr></thead><tbody><tr>"
                 
                 for cantidad in conteo_años.values:
-                    html_tabla += f"<td class='tarjeta-clic' {js_anios}>{cantidad}</td>"
+                    html_tabla += f"<td class='tarjeta-clic tarjeta-clic-anios'>{cantidad}</td>"
                 html_tabla += "</tr></tbody></table></div>"
                 st.markdown(html_tabla, unsafe_allow_html=True)
 
@@ -402,6 +396,37 @@ with tab_gestion:
                 
         else:
             st.info("La columna J no está disponible en la base de datos actual para clasificar por años.")
+
+        # ==============================================================================
+        # INYECCIÓN JAVASCRIPT SEGURA PARA HACER FUNCIONAR LOS CLICS DE LAS TARJETAS
+        # ==============================================================================
+        components.html("""
+        <script>
+        setTimeout(function() {
+            const parentDOM = window.parent.document;
+            
+            // Script para las tarjetas de "Última Acción"
+            const tAcciones = parentDOM.querySelectorAll('.tarjeta-clic-acciones');
+            tAcciones.forEach(el => {
+                el.onclick = function() {
+                    const tabs = Array.from(parentDOM.querySelectorAll('[role="tab"]'));
+                    const eqTabs = tabs.filter(t => t.textContent.includes('Comparativo por Equipos'));
+                    if(eqTabs.length > 0) eqTabs[0].click();
+                };
+            });
+
+            // Script para los números de "Años"
+            const tAnios = parentDOM.querySelectorAll('.tarjeta-clic-anios');
+            tAnios.forEach(el => {
+                el.onclick = function() {
+                    const tabs = Array.from(parentDOM.querySelectorAll('[role="tab"]'));
+                    const eqTabs = tabs.filter(t => t.textContent.includes('Comparativo por Equipos'));
+                    if(eqTabs.length > 1) eqTabs[1].click();
+                };
+            });
+        }, 500);
+        </script>
+        """, height=0, width=0)
 
         # ==============================================================================
         # BLOQUE 3: EQUIPOS DE TRABAJO
