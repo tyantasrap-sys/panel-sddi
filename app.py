@@ -27,7 +27,7 @@ if not st.session_state.autenticado:
         st.markdown("""
         <div style='background-color: #FFFFFF; padding: 40px; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.1); text-align: center; border-top: 5px solid #2980B9;'>
             <h2 style='color: #2C3E50; margin-bottom: 5px;'>SBN | DGPE | SDDI</h2>
-            <p style='color: #7F8C8D; margin-bottom: 25px;'>Sistema de Auditoría de Trazabilidad</p>
+            <p style='color: #7F8C8D; margin-bottom: 25px;'>Sistema de Trazabilidad de expedientes SDDI</p>
         </div>
         """, unsafe_allow_html=True)
         
@@ -39,7 +39,7 @@ if not st.session_state.autenticado:
                 st.rerun()
             else:
                 st.error("❌ Credenciales incorrectas. Acceso denegado.")
-    st.stop() # Detiene la ejecución del resto del código si no hay autenticación
+    st.stop()
 
 # ==============================================================================
 # VARIABLES DE NAVEGACIÓN
@@ -86,7 +86,6 @@ def sincronizar_estados_sunarp(usuario_codigo):
         }
 
         pestañas_a_procesar = mapeo_pestañas.get(usuario_codigo, [])
-        cambios_realizados = False
 
         for nombre_pestaña in pestañas_a_procesar:
             try:
@@ -116,7 +115,6 @@ def sincronizar_estados_sunarp(usuario_codigo):
                 if hubo_modificacion_en_pestaña:
                     rango_escritura = f"M1:M{len(columna_m_actualizada)}"
                     ws_destino.update(values=columna_m_actualizada, range_name=rango_escritura)
-                    cambios_realizados = True
 
             except gspread.exceptions.WorksheetNotFound:
                 continue
@@ -192,11 +190,14 @@ def mostrar_modal_detalle(tipo_clic, param1, param2, param3, df_base):
         df_final["Fecha_Ultima_Accion"] = df_modal.iloc[:, 3]
         df_final["Trazabilidad_Oculta"] = df_modal["Trazabilidad"] if "Trazabilidad" in df_modal.columns else df_modal.iloc[:, 5]
         
-        # ANONIMIZACIÓN SEGURA
-        mask_compraventa = df_final["Procedimiento"].astype(str).str.upper().str.contains("COMPRAVENTA")
+        # ANONIMIZACIÓN SEGURA Y EXPANDIDA (Compraventa, Permuta, Desafectación, Subasta)
+        terminos_privacidad = "COMPRAVENTA|PERMUTA|DESAFECTACI[OÓ]N|SUBASTA"
+        mask_privacidad = df_final["Procedimiento"].astype(str).str.upper().str.contains(terminos_privacidad, regex=True)
+        
         palabras_entidad = "MUNICIPALIDAD|GOBIERNO|MINISTERIO|S\.A\.|S\.A\.C\.|S\.R\.L\.|E\.I\.R\.L\.|ASOCIACION|EMPRESA|COMUNIDAD|CONSORCIO|DIRECCION|SUPERINTENDENCIA|UNIVERSIDAD|COOPERATIVA|SINDICATO|PROYECTO|IGLESIA|COMITE|JUNTA"
         mask_juridica = df_final["Administrado"].astype(str).str.upper().str.contains(palabras_entidad, na=False)
-        mask_ocultar = mask_compraventa & ~mask_juridica
+        
+        mask_ocultar = mask_privacidad & ~mask_juridica
         df_final.loc[mask_ocultar, "Administrado"] = "PERSONA NATURAL"
         
         df_final["URL_Tramite"] = "https://tramitetransparente.sbn.gob.pe/#auto=" + df_final["Expediente"].astype(str)
@@ -272,7 +273,7 @@ h1 a svg, h2 a svg, h3 a svg { display: none !important; }
 .tarjeta-clic { cursor: pointer; transition: all 0.2s ease; }
 .tarjeta-clic:hover { transform: translateY(-3px); box-shadow: 0 6px 12px rgba(0,0,0,0.15) !important; z-index: 10; background-color: #FDFEFE !important; }
 
-/* REGLAS ESTRICTAS CONTRA EL SHAKING DE LAS TABLAS INTERACTIVAS */
+/* REGLAS ESTRICTAS CONTRA EL SHAKING Y ACTIVACIÓN DE CURSOR POINTER (MANITO) */
 .celda-proc-clic, .mod-proc, .mod-proc-eq, .celda-equipo-clic, .mod-anio-gen, .mod-anio-eq, .mod-accion, .mod-accion-prof, .mod-anio-gen-eq, .mod-anio-prof { 
     cursor: pointer !important; 
     transition: background-color 0.2s ease, color 0.2s ease; 
@@ -635,7 +636,7 @@ with tab_gestion:
             st.markdown(html_acc_p, unsafe_allow_html=True)
 
         # ------------------------------------------------------------------------------
-        # CAPA 2 - BLOQUE 2: AÑO DE CREACIÓN (CON TOTAL GENERAL EN CADA PESTAÑA)
+        # CAPA 2 - BLOQUE 2: AÑO DE CREACIÓN
         # ------------------------------------------------------------------------------
         st.markdown("<hr style='border:none; border-top:1px dashed #E0E6ED; margin:25px 0 15px 0;'><div id='ancla-anios'></div><h4 style='color:#2C3E50; margin-bottom:5px;'>📅 Expedientes por año de creación</h4>", unsafe_allow_html=True)
         
@@ -659,7 +660,6 @@ with tab_gestion:
                 for cantidad, año in zip(conteo_años_eq.values, conteo_años_eq.index):
                     html_tabla_eq += f"<td class='celda-equipo-clic mod-anio-gen-eq' data-equipo='{eq_sel}' data-anio='{año}'>{cantidad}</td>"
                 
-                # TOTAL GENERAL CELL IN RESUMEN GENERAL
                 html_tabla_eq += f"<td class='celda-equipo-clic mod-anio-gen-eq' data-equipo='{eq_sel}' data-anio='TOTAL' style='font-weight:900; background-color: #E8F4F8;'>{len(df_eq)}</td>"
                 html_tabla_eq += "</tr></tbody></table></div>"
                 st.markdown(html_tabla_eq, unsafe_allow_html=True)
@@ -683,7 +683,6 @@ with tab_gestion:
                         else: html_anio_proc_eq += f"<td>{txt}</td>"
                     html_anio_proc_eq += f"<td class='mod-proc-eq' data-equipo='{eq_sel}' data-proc='{proc}' data-anio='TOTAL' style='font-weight:900;'>{len(df_pr)}</td></tr>"
                 
-                # TOTAL GENERAL ROW IN POR PROCEDIMIENTO
                 html_anio_proc_eq += "<tr style='background-color: #F8F9F9; font-weight: 900;'><td class='col-proc mod-proc-eq' data-equipo='" + eq_sel + "' data-proc='TOTAL' data-anio='TOTAL' style='text-align: left; padding-left: 15px;'>TOTAL GENERAL</td>"
                 for a in list_años_eq:
                     val_a = len(df_eq[df_eq['Año_Temp'] == a])
@@ -710,7 +709,6 @@ with tab_gestion:
                         else: html_anio_p += f"<td>{txt}</td>"
                     html_anio_p += f"<td class='celda-equipo-clic mod-anio-prof' data-equipo='{eq_sel}' data-prof='{prof}' data-anio='TOTAL' style='font-weight:900;'>{len(df_pr)}</td></tr>"
                 
-                # TOTAL GENERAL ROW IN POR PROFESIONAL
                 html_anio_p += "<tr style='background-color: #F8F9F9; font-weight: 900;'><td class='col-equipo celda-equipo-clic mod-anio-prof' data-equipo='" + eq_sel + "' data-prof='TOTAL' data-anio='TOTAL' style='text-align: left; padding-left: 15px;'>TOTAL GENERAL</td>"
                 for a in list_años_eq:
                     val_a = len(df_eq[df_eq['Año_Temp'] == a])
@@ -721,7 +719,7 @@ with tab_gestion:
                 st.markdown(html_anio_p, unsafe_allow_html=True)
 
         # ------------------------------------------------------------------------------
-        # CAPA 2 - BLOQUE EXCEPCIÓN: SEGUIMIENTO TÍTULOS SUNARP (SOLO TRANSVERSAL)
+        # CAPA 2 - BLOQUE EXCEPCIÓN: SEGUIMIENTO TÍTULOS SUNARP
         # ------------------------------------------------------------------------------
         if eq_sel == "Transversal":
             st.markdown("<hr style='border:none; border-top:1px solid #E0E6ED; margin:40px 0 20px 0;'><h4 style='color:#2C3E50;'>🏢 Seguimiento Títulos SUNARP</h4>", unsafe_allow_html=True)
