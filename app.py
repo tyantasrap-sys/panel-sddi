@@ -275,13 +275,34 @@ with tab_gestion:
     if st.session_state.capa_actual == 1:
         mostrar_encabezado("Gestión de Expedientes SDDI", "Gestión y seguimiento de expedientes en trámite a nivel nacional.", mostrar_volver=False)
 
+        # BLOQUE 1: ÚLTIMA ACCIÓN REALIZADA
+        st.markdown("<h4 style='color:#2C3E50; margin-bottom:15px;'>📌 Expedientes por última acción realizada</h4>", unsafe_allow_html=True)
         m1, m2, m3, m4 = st.columns(4)
         with m1: crear_tarjeta("📁 Total en Trámite", len(df), "#3498DB")
-        with m2: crear_tarjeta("🟢 Trámite Activo", df[df["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False)].shape[0], "#2ECC71")
-        with m3: crear_tarjeta("🟡 Flujo Lento", df[df["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False)].shape[0], "#F1C40F")
-        with m4: crear_tarjeta("🔴 Paralizados", df[df["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)].shape[0], "#E74C3C")
+        with m2: crear_tarjeta("🟢 Trámite Activo (1-3 semanas)", df[df["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False)].shape[0], "#2ECC71")
+        with m3: crear_tarjeta("🟡 Flujo Lento (1 a 5 meses)", df[df["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False)].shape[0], "#F1C40F")
+        with m4: crear_tarjeta("🔴 Paralizados (+6 meses)", df[df["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)].shape[0], "#E74C3C")
 
-        st.markdown("<hr style='border:none; border-top:1px solid #E0E6ED; margin:20px 0;'>", unsafe_allow_html=True)
+        # BLOQUE 2: AÑO DE CREACIÓN (Extracción de Columna J)
+        st.markdown("<hr style='border:none; border-top:1px dashed #E0E6ED; margin:25px 0 15px 0;'>", unsafe_allow_html=True)
+        st.markdown("<h4 style='color:#2C3E50; margin-bottom:15px;'>📅 Expedientes por año de creación</h4>", unsafe_allow_html=True)
+        
+        if len(df.columns) >= 10:
+            col_j = df.columns[9]
+            # Se aísla un número de 4 dígitos (19xx o 20xx) por si la celda incluye formato de fecha completa
+            años = df[col_j].astype(str).str.extract(r'((?:19|20)\d{2})')[0].fillna("Sin Fecha")
+            conteo_años = años.value_counts().sort_index(ascending=False)
+            
+            # Se crea una cuadrícula dinámica asegurando simetría visual
+            columnas_años = st.columns(5)
+            for idx, (año, cantidad) in enumerate(conteo_años.items()):
+                with columnas_años[idx % 5]:
+                    crear_tarjeta(f"Año {año}", cantidad, "#95A5A6")
+        else:
+            st.info("La columna J no está disponible en la base de datos actual para clasificar por años.")
+
+        # BLOQUE 3: EQUIPOS DE TRABAJO
+        st.markdown("<hr style='border:none; border-top:1px solid #E0E6ED; margin:25px 0 20px 0;'>", unsafe_allow_html=True)
         st.markdown("<h4 style='color:#2C3E50; text-align:center;'>Carga General por Equipos de Trabajo</h4><br>", unsafe_allow_html=True)
 
         equipos = sorted(df["Equipo"].dropna().astype(str).unique().tolist())
