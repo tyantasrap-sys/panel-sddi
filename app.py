@@ -143,9 +143,8 @@ div[data-testid="stExpander"] summary p { font-size: 14px !important; font-weigh
 .tabla-matricial th { background-color: #2980B9; color: #FFFFFF; text-align: center; padding: 6px 8px; font-size: 11px; font-weight: 700; border: 1px solid #1A5276; text-transform: uppercase; line-height: 1.2; }
 .tabla-matricial th.header-secundario { background-color: #F8F9F9; color: #7F8C8D; border-bottom: 2px solid #BDC3C7; border-color: #E0E6ED; font-size: 12px; }
 .tabla-matricial th.col-fija { width: 20%; min-width: 180px; text-align: left; padding-left: 15px; white-space: nowrap; }
-.tabla-matricial td { background-color: #FFFFFF; color: #2C3E50; text-align: center; padding: 6px 10px; font-size: 15px; font-weight: 800; border: 1px solid #E0E6ED; }
+.tabla-matricial td { background-color: #FFFFFF; color: #2C3E50; text-align: center; padding: 6px 10px; font-size: 13px; font-weight: 700; border: 1px solid #E0E6ED; }
 .tabla-matricial td.col-equipo { background-color: #F4F6F7; text-align: left; padding-left: 15px; font-size: 13px; font-weight: 600; color: #2C3E50; border: 1px solid #E0E6ED; white-space: nowrap; }
-/* NUEVA CLASE PARA PROCEDIMIENTOS (PERMITE TEXTO EN VARIAS LÍNEAS) */
 .tabla-matricial td.col-proc { background-color: #F4F6F7; text-align: left; padding: 8px 15px; font-size: 11px; font-weight: 600; color: #1A252F; border: 1px solid #E0E6ED; white-space: normal; min-width: 250px; line-height: 1.3; }
 </style>
 """, unsafe_allow_html=True)
@@ -356,14 +355,10 @@ with tab_gestion:
         st.markdown("<hr style='border:none; border-top:1px dashed #E0E6ED; margin:25px 0 15px 0;'>", unsafe_allow_html=True)
         st.markdown("<h4 style='color:#2C3E50; margin-bottom:5px;'>📅 Expedientes por año de creación</h4>", unsafe_allow_html=True)
         
-        # Nueva estructura de pestañas: Se añade "Por Procedimiento" en el medio
         tab_anio_gen, tab_anio_proc, tab_anio_eq = st.tabs(["📊 Resumen General", "📋 Por Procedimiento", "🏢 Comparativo por Equipos"])
         
-        # Verificamos que existan las columnas J (9) y K (10)
         if len(df.columns) >= 11:
             df['Año_Temp'] = df[df.columns[9]].astype(str).str.extract(r'((?:19|20)\d{2})')[0].fillna("S/F")
-            
-            # Limpiamos y estandarizamos la Columna K (Procedimientos)
             df['Procedimiento_Temp'] = df[df.columns[10]].astype(str).str.strip().str.upper()
             df['Procedimiento_Temp'] = df['Procedimiento_Temp'].replace(['NAN', 'NONE', ''], 'SIN ESPECIFICAR')
             
@@ -392,7 +387,9 @@ with tab_gestion:
                 
             with tab_anio_proc:
                 list_años = df['Año_Temp'].value_counts().sort_index(ascending=True).index.tolist()
-                procedimientos_lista = sorted(df['Procedimiento_Temp'].unique().tolist())
+                
+                # ORDENAMIENTO DINÁMICO: De mayor a menor cantidad total de expedientes
+                procedimientos_lista = df['Procedimiento_Temp'].value_counts().index.tolist()
                 
                 html_anio_proc = """
                 <div style="overflow-x: auto; margin: 10px auto 20px auto; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.04); border: 1px solid #BDC3C7; background-color: #FFFFFF;">
@@ -732,132 +729,132 @@ with tab_gestion:
                         else:
                             st.info("No existen estados procesados.")
 
-    # ==============================================================================
-    # INYECCIÓN JAVASCRIPT GLOBAL PARA CLICS E INTERACTIVIDAD DE NAVEGACIÓN
-    # ==============================================================================
-    components.html("""
-    <script>
-    setTimeout(function() {
-        const parentDOM = window.parent.document;
-        
-        // -----------------------------------------------------------
-        // 1. CAPTURAR CLICS EN LA CAPA 1 PARA NAVEGAR A LA CAPA 2
-        // -----------------------------------------------------------
-        
-        // Clics en la tabla de Última Acción (Capa 1)
-        const celdasAcciones = parentDOM.querySelectorAll('.celda-acciones-clic');
-        celdasAcciones.forEach(el => {
-            el.onclick = function() {
-                const equipoInfo = el.getAttribute('data-equipo');
-                const btns = Array.from(parentDOM.querySelectorAll('button'));
-                const btnVerReporte = btns.find(b => b.textContent.includes('Ver Reporte: ' + equipoInfo));
-                if(btnVerReporte) {
-                    window.sessionStorage.setItem('scroll_target', 'acciones');
-                    btnVerReporte.click();
-                }
-            };
-        });
-
-        // Clics en la tabla de Años (Capa 1)
-        const celdasAnios = parentDOM.querySelectorAll('.celda-anios-clic');
-        celdasAnios.forEach(el => {
-            el.onclick = function() {
-                const equipoInfo = el.getAttribute('data-equipo');
-                const btns = Array.from(parentDOM.querySelectorAll('button'));
-                const btnVerReporte = btns.find(b => b.textContent.includes('Ver Reporte: ' + equipoInfo));
-                if(btnVerReporte) {
-                    window.sessionStorage.setItem('scroll_target', 'anios');
-                    btnVerReporte.click();
-                }
-            };
-        });
-
-        // Clic en los botones directos "Ver Reporte" (Forzar tope)
-        const btnsReporte = Array.from(parentDOM.querySelectorAll('button')).filter(b => b.textContent.includes('Ver Reporte: '));
-        btnsReporte.forEach(btn => {
-            btn.addEventListener('click', function(e) {
-                if(!window.sessionStorage.getItem('scroll_target')) {
-                    window.sessionStorage.setItem('scroll_target', 'top');
-                }
-            });
-        });
-
-        // -----------------------------------------------------------
-        // 2. EJECUTAR EL SCROLL Y ABRIR PESTAÑAS AL ENTRAR A CAPA 2
-        // -----------------------------------------------------------
-        const target = window.sessionStorage.getItem('scroll_target');
-        if (target) {
-            if (target === 'acciones') {
-                const anchor = parentDOM.getElementById('ancla-acciones');
-                if (anchor) anchor.scrollIntoView({behavior: 'smooth', block: 'start'});
-                
-                const tabs = Array.from(parentDOM.querySelectorAll('[role="tab"]'));
-                const profTabs = tabs.filter(t => t.textContent.includes('Por Profesional'));
-                if(profTabs.length > 0) profTabs[0].click();
-                
-            } else if (target === 'anios') {
-                const anchor = parentDOM.getElementById('ancla-anios');
-                if (anchor) anchor.scrollIntoView({behavior: 'smooth', block: 'start'});
-                
-                const tabs = Array.from(parentDOM.querySelectorAll('[role="tab"]'));
-                const profTabs = tabs.filter(t => t.textContent.includes('Por Profesional'));
-                if(profTabs.length > 1) profTabs[1].click();
-                
-            } else if (target === 'top') {
-                const anchorTop = parentDOM.getElementById('ancla-top');
-                if (anchorTop) {
-                    anchorTop.scrollIntoView({behavior: 'smooth', block: 'start'});
-                } else {
-                    window.parent.scrollTo({top: 0, behavior: 'smooth'});
-                }
+# ==============================================================================
+# INYECCIÓN JAVASCRIPT GLOBAL PARA CLICS E INTERACTIVIDAD DE NAVEGACIÓN
+# ==============================================================================
+components.html("""
+<script>
+setTimeout(function() {
+    const parentDOM = window.parent.document;
+    
+    // -----------------------------------------------------------
+    // 1. CAPTURAR CLICS EN LA CAPA 1 PARA NAVEGAR A LA CAPA 2
+    // -----------------------------------------------------------
+    
+    // Clics en la tabla de Última Acción (Capa 1)
+    const celdasAcciones = parentDOM.querySelectorAll('.celda-acciones-clic');
+    celdasAcciones.forEach(el => {
+        el.onclick = function() {
+            const equipoInfo = el.getAttribute('data-equipo');
+            const btns = Array.from(parentDOM.querySelectorAll('button'));
+            const btnVerReporte = btns.find(b => b.textContent.includes('Ver Reporte: ' + equipoInfo));
+            if(btnVerReporte) {
+                window.sessionStorage.setItem('scroll_target', 'acciones');
+                btnVerReporte.click();
             }
+        };
+    });
+
+    // Clics en la tabla de Años (Capa 1)
+    const celdasAnios = parentDOM.querySelectorAll('.celda-anios-clic');
+    celdasAnios.forEach(el => {
+        el.onclick = function() {
+            const equipoInfo = el.getAttribute('data-equipo');
+            const btns = Array.from(parentDOM.querySelectorAll('button'));
+            const btnVerReporte = btns.find(b => b.textContent.includes('Ver Reporte: ' + equipoInfo));
+            if(btnVerReporte) {
+                window.sessionStorage.setItem('scroll_target', 'anios');
+                btnVerReporte.click();
+            }
+        };
+    });
+
+    // Clic en los botones directos "Ver Reporte" (Forzar tope)
+    const btnsReporte = Array.from(parentDOM.querySelectorAll('button')).filter(b => b.textContent.includes('Ver Reporte: '));
+    btnsReporte.forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            if(!window.sessionStorage.getItem('scroll_target')) {
+                window.sessionStorage.setItem('scroll_target', 'top');
+            }
+        });
+    });
+
+    // -----------------------------------------------------------
+    // 2. EJECUTAR EL SCROLL Y ABRIR PESTAÑAS AL ENTRAR A CAPA 2
+    // -----------------------------------------------------------
+    const target = window.sessionStorage.getItem('scroll_target');
+    if (target) {
+        if (target === 'acciones') {
+            const anchor = parentDOM.getElementById('ancla-acciones');
+            if (anchor) anchor.scrollIntoView({behavior: 'smooth', block: 'start'});
             
-            // Limpiamos el marcador de memoria
-            window.sessionStorage.removeItem('scroll_target');
+            const tabs = Array.from(parentDOM.querySelectorAll('[role="tab"]'));
+            const profTabs = tabs.filter(t => t.textContent.includes('Por Profesional'));
+            if(profTabs.length > 0) profTabs[0].click();
+            
+        } else if (target === 'anios') {
+            const anchor = parentDOM.getElementById('ancla-anios');
+            if (anchor) anchor.scrollIntoView({behavior: 'smooth', block: 'start'});
+            
+            const tabs = Array.from(parentDOM.querySelectorAll('[role="tab"]'));
+            const profTabs = tabs.filter(t => t.textContent.includes('Por Profesional'));
+            if(profTabs.length > 1) profTabs[1].click();
+            
+        } else if (target === 'top') {
+            const anchorTop = parentDOM.getElementById('ancla-top');
+            if (anchorTop) {
+                anchorTop.scrollIntoView({behavior: 'smooth', block: 'start'});
+            } else {
+                window.parent.scrollTo({top: 0, behavior: 'smooth'});
+            }
         }
+        
+        // Limpiamos el marcador de memoria
+        window.sessionStorage.removeItem('scroll_target');
+    }
 
-        // -----------------------------------------------------------
-        // 3. CAMBIO DE PESTAÑAS DENTRO DE LA MISMA VISTA (TARJETAS)
-        // -----------------------------------------------------------
-        const tAccionesGen = parentDOM.querySelectorAll('.tarjeta-clic-acciones');
-        tAccionesGen.forEach(el => {
-            el.onclick = function() {
-                const tabs = Array.from(parentDOM.querySelectorAll('[role="tab"]'));
-                const eqTabs = tabs.filter(t => t.textContent.includes('Comparativo por Equipos'));
-                if(eqTabs.length > 0) eqTabs[0].click();
-            };
-        });
+    // -----------------------------------------------------------
+    // 3. CAMBIO DE PESTAÑAS DENTRO DE LA MISMA VISTA (TARJETAS)
+    // -----------------------------------------------------------
+    const tAccionesGen = parentDOM.querySelectorAll('.tarjeta-clic-acciones');
+    tAccionesGen.forEach(el => {
+        el.onclick = function() {
+            const tabs = Array.from(parentDOM.querySelectorAll('[role="tab"]'));
+            const eqTabs = tabs.filter(t => t.textContent.includes('Comparativo por Equipos'));
+            if(eqTabs.length > 0) eqTabs[0].click();
+        };
+    });
 
-        const tAniosGen = parentDOM.querySelectorAll('.tarjeta-clic-anios');
-        tAniosGen.forEach(el => {
-            el.onclick = function() {
-                const tabs = Array.from(parentDOM.querySelectorAll('[role="tab"]'));
-                const eqTabs = tabs.filter(t => t.textContent.includes('Comparativo por Equipos'));
-                if(eqTabs.length > 2) eqTabs[2].click(); // Se cambió a 2 por la nueva pestaña "Por Procedimiento"
-            };
-        });
+    const tAniosGen = parentDOM.querySelectorAll('.tarjeta-clic-anios');
+    tAniosGen.forEach(el => {
+        el.onclick = function() {
+            const tabs = Array.from(parentDOM.querySelectorAll('[role="tab"]'));
+            const eqTabs = tabs.filter(t => t.textContent.includes('Comparativo por Equipos'));
+            if(eqTabs.length > 2) eqTabs[2].click();
+        };
+    });
 
-        const tAccionesProf = parentDOM.querySelectorAll('.tarjeta-clic-acciones-prof');
-        tAccionesProf.forEach(el => {
-            el.onclick = function() {
-                const tabs = Array.from(parentDOM.querySelectorAll('[role="tab"]'));
-                const profTabs = tabs.filter(t => t.textContent.includes('Por Profesional'));
-                if(profTabs.length > 0) profTabs[0].click();
-            };
-        });
+    const tAccionesProf = parentDOM.querySelectorAll('.tarjeta-clic-acciones-prof');
+    tAccionesProf.forEach(el => {
+        el.onclick = function() {
+            const tabs = Array.from(parentDOM.querySelectorAll('[role="tab"]'));
+            const profTabs = tabs.filter(t => t.textContent.includes('Por Profesional'));
+            if(profTabs.length > 0) profTabs[0].click();
+        };
+    });
 
-        const tAniosProf = parentDOM.querySelectorAll('.tarjeta-clic-anios-prof');
-        tAniosProf.forEach(el => {
-            el.onclick = function() {
-                const tabs = Array.from(parentDOM.querySelectorAll('[role="tab"]'));
-                const profTabs = tabs.filter(t => t.textContent.includes('Por Profesional'));
-                if(profTabs.length > 1) profTabs[1].click();
-            };
-        });
+    const tAniosProf = parentDOM.querySelectorAll('.tarjeta-clic-anios-prof');
+    tAniosProf.forEach(el => {
+        el.onclick = function() {
+            const tabs = Array.from(parentDOM.querySelectorAll('[role="tab"]'));
+            const profTabs = tabs.filter(t => t.textContent.includes('Por Profesional'));
+            if(profTabs.length > 1) profTabs[1].click();
+        };
+    });
 
-    }, 400);
-    </script>
-    """, height=0, width=0)
+}, 400);
+</script>
+""", height=0, width=0)
 
 # ==============================================================================
 # CONTENIDO DE LA PESTAÑA 2: AVANCE DE PRODUCCIÓN (ENRUTAMIENTO NATIVO Y SEGURO)
