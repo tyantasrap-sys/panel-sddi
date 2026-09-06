@@ -123,9 +123,14 @@ footer, #MainMenu, [data-testid="stDecoration"], [data-testid="stToolbar"] { dis
 h1 a svg, h2 a svg, h3 a svg { display: none !important; } 
 a[href*="github.com"], a[href*="streamlit.io"] { pointer-events: none !important; display: none !important; }
 
-.tarjeta-metrica { background-color: #FFFFFF; padding: 6px 10px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.04); margin-bottom: 12px; text-align: center; height: 68px !important; display: flex; flex-direction: column; justify-content: center; align-items: center; }
-.tarjeta-titulo { color: #7F8C8D; font-size: 10px; margin: 0; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; min-height: 18px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px; line-height: 1.1; }
-.tarjeta-valor { color: #2C3E50; font-size: 24px; margin: 0 !important; font-weight: 700; line-height: 1; }
+.tarjeta-metrica { background-color: #FFFFFF; padding: 6px 10px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.04); margin-bottom: 12px; text-align: center; height: 68px !important; display: flex; flex-direction: column; justify-content: center; align-items: center; position: relative; z-index: 1; }
+.tarjeta-titulo { color: #7F8C8D; font-size: 10px; margin: 0; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; min-height: 18px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px; line-height: 1.1; pointer-events: none; }
+.tarjeta-valor { color: #2C3E50; font-size: 24px; margin: 0 !important; font-weight: 700; line-height: 1; pointer-events: none; }
+
+/* NUEVA CLASE PARA HACER CLICKABLES LAS TARJETAS Y TABLAS */
+.tarjeta-clic { cursor: pointer; transition: all 0.2s ease; }
+.tarjeta-clic:hover { transform: translateY(-3px); box-shadow: 0 6px 12px rgba(0,0,0,0.15) !important; z-index: 10; background-color: #FDFEFE !important; }
+
 .tarjeta-equipo { background-color: #FFFFFF; padding: 12px 10px; border-radius: 10px; border-top: 4px solid #2980B9; box-shadow: 0 3px 8px rgba(0,0,0,0.04); text-align: center; margin-bottom: 10px; height: 120px !important; display: flex; flex-direction: column; justify-content: center; }
 div[data-testid="stExpander"] summary p { font-size: 14px !important; font-weight: 400 !important; color: #2C3E50 !important; }
 
@@ -171,9 +176,18 @@ def mostrar_encabezado(titulo, subtitulo, mostrar_volver=False):
         """
         st.markdown(html_encabezado, unsafe_allow_html=True)
 
-def crear_tarjeta(titulo, valor, color_borde):
+def crear_tarjeta(titulo, valor, color_borde, id_click=""):
+    js_script = ""
+    # Inyección de código JS para buscar los botones de las pestañas en el navegador y forzar el salto
+    if id_click == "acciones":
+        js_script = """onclick="let tabs=Array.from(window.parent.document.querySelectorAll('[role=\\'tab\\']')).filter(el=>el.innerText.includes('Comparativo por Equipos')); if(tabs.length>0) tabs[0].click();" """
+    elif id_click == "anios":
+        js_script = """onclick="let tabs=Array.from(window.parent.document.querySelectorAll('[role=\\'tab\\']')).filter(el=>el.innerText.includes('Comparativo por Equipos')); if(tabs.length>1) tabs[1].click();" """
+        
+    clase_clic = "tarjeta-clic" if id_click else ""
+    
     st.markdown(f"""
-    <div class="tarjeta-metrica" style="border-bottom: 4px solid {color_borde};">
+    <div class="tarjeta-metrica {clase_clic}" style="border-bottom: 4px solid {color_borde};" {js_script}>
         <div class="tarjeta-titulo">{titulo}</div>
         <div class="tarjeta-valor">{valor}</div>
     </div>
@@ -293,10 +307,10 @@ with tab_gestion:
         with tab_acc_gen:
             # Las columnas de los bordes (1) actúan como espaciadores para compactar las tarjetas centrales (3)
             c_izq, m1, m2, m3, m4, c_der = st.columns([1, 3, 3, 3, 3, 1])
-            with m1: crear_tarjeta("📁 Total en Trámite", len(df), "#3498DB")
-            with m2: crear_tarjeta("🟢 Trámite Activo (1-3 semanas)", df[df["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False)].shape[0], "#2ECC71")
-            with m3: crear_tarjeta("🟡 Flujo Lento (1 a 5 meses)", df[df["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False)].shape[0], "#F1C40F")
-            with m4: crear_tarjeta("🔴 Paralizados (+6 meses)", df[df["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)].shape[0], "#E74C3C")
+            with m1: crear_tarjeta("📁 Total en Trámite", len(df), "#3498DB", id_click="acciones")
+            with m2: crear_tarjeta("🟢 Trámite Activo (1-3 semanas)", df[df["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False)].shape[0], "#2ECC71", id_click="acciones")
+            with m3: crear_tarjeta("🟡 Flujo Lento (1 a 5 meses)", df[df["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False)].shape[0], "#F1C40F", id_click="acciones")
+            with m4: crear_tarjeta("🔴 Paralizados (+6 meses)", df[df["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)].shape[0], "#E74C3C", id_click="acciones")
 
         with tab_acc_eq:
             html_acc = """
@@ -305,10 +319,10 @@ with tab_gestion:
                     <thead>
                         <tr>
                             <th style="text-align: left; padding-left: 15px;">EQUIPO DE TRABAJO</th>
+                            <th style="background-color: #27AE60;">TRÁMITE ACTIVO<br><span style="font-size:9px; font-weight:400;">(1-3 SEMANAS)</span></th>
+                            <th style="background-color: #F39C12;">FLUJO LENTO<br><span style="font-size:9px; font-weight:400;">(1 A 5 MESES)</span></th>
+                            <th style="background-color: #C0392B;">PARALIZADOS<br><span style="font-size:9px; font-weight:400;">(+6 MESES)</span></th>
                             <th style="background-color: #1F618D;">TOTAL EXP.</th>
-                            <th style="background-color: #27AE60;">TRÁMITE ACTIVO</th>
-                            <th style="background-color: #F39C12;">FLUJO LENTO</th>
-                            <th style="background-color: #C0392B;">PARALIZADOS</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -319,7 +333,7 @@ with tab_gestion:
                 t_act = df_e[df_e["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False)].shape[0]
                 t_len = df_e[df_e["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df_e["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False)].shape[0]
                 t_par = df_e[df_e["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)].shape[0]
-                html_acc += f"<tr><td class='col-equipo'>{eq}</td><td>{t_tot}</td><td>{t_act}</td><td>{t_len}</td><td>{t_par}</td></tr>"
+                html_acc += f"<tr><td class='col-equipo'>{eq}</td><td>{t_act}</td><td>{t_len}</td><td>{t_par}</td><td style='font-weight:900;'>{t_tot}</td></tr>"
             
             html_acc += "</tbody></table></div>"
             st.markdown(html_acc, unsafe_allow_html=True)
@@ -337,6 +351,8 @@ with tab_gestion:
             
             with tab_anio_gen:
                 conteo_años = df['Año_Temp'].value_counts().sort_index(ascending=True)
+                js_anios = """onclick="let tabs=Array.from(window.parent.document.querySelectorAll('[role=\\'tab\\']')).filter(el=>el.innerText.includes('Comparativo por Equipos')); if(tabs.length>1) tabs[1].click();" """
+
                 html_tabla = f"""
                 <div style="overflow-x: auto; margin: 10px auto 20px auto; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.04); border: 1px solid #BDC3C7; background-color: #FFFFFF;">
                     <table class="tabla-matricial">
@@ -353,7 +369,7 @@ with tab_gestion:
                 html_tabla += "</tr></thead><tbody><tr>"
                 
                 for cantidad in conteo_años.values:
-                    html_tabla += f"<td>{cantidad}</td>"
+                    html_tabla += f"<td class='tarjeta-clic' {js_anios}>{cantidad}</td>"
                 html_tabla += "</tr></tbody></table></div>"
                 st.markdown(html_tabla, unsafe_allow_html=True)
 
@@ -366,21 +382,20 @@ with tab_gestion:
                         <thead>
                             <tr>
                                 <th style="text-align: left; padding-left: 15px;">EQUIPO DE TRABAJO</th>
-                                <th style="background-color: #1F618D;">TOTAL</th>
                 """
                 for a in list_años:
                     html_anio_eq += f"<th>{a}</th>"
-                html_anio_eq += "</tr></thead><tbody>"
+                html_anio_eq += "<th style='background-color: #1F618D;'>TOTAL</th></tr></thead><tbody>"
                 
                 for eq in equipos_lista:
                     df_e = df[df["Equipo"] == eq]
                     conteo_e = df_e['Año_Temp'].value_counts()
-                    html_anio_eq += f"<tr><td class='col-equipo'>{eq}</td><td style='font-weight:900;'>{len(df_e)}</td>"
+                    html_anio_eq += f"<tr><td class='col-equipo'>{eq}</td>"
                     for a in list_años:
                         val = conteo_e.get(a, 0)
                         txt = str(val) if val > 0 else "-"
                         html_anio_eq += f"<td>{txt}</td>"
-                    html_anio_eq += "</tr>"
+                    html_anio_eq += f"<td style='font-weight:900;'>{len(df_e)}</td></tr>"
                 
                 html_anio_eq += "</tbody></table></div>"
                 st.markdown(html_anio_eq, unsafe_allow_html=True)
