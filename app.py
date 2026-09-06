@@ -128,19 +128,20 @@ a[href*="github.com"], a[href*="streamlit.io"] { pointer-events: none !important
 .tarjeta-titulo { color: #7F8C8D; font-size: 10px; margin: 0; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; min-height: 18px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px; line-height: 1.1; pointer-events: none; }
 .tarjeta-valor { color: #2C3E50; font-size: 24px; margin: 0 !important; font-weight: 700; line-height: 1; pointer-events: none; }
 
-/* NUEVA CLASE PARA HACER CLICKABLES LAS TARJETAS Y TABLAS */
+/* CLASE PARA HACER CLICKABLES LAS TARJETAS Y TABLAS */
 .tarjeta-clic { cursor: pointer; transition: all 0.2s ease; }
 .tarjeta-clic:hover { transform: translateY(-3px); box-shadow: 0 6px 12px rgba(0,0,0,0.15) !important; z-index: 10; background-color: #FDFEFE !important; }
 
 .tarjeta-equipo { background-color: #FFFFFF; padding: 12px 10px; border-radius: 10px; border-top: 4px solid #2980B9; box-shadow: 0 3px 8px rgba(0,0,0,0.04); text-align: center; margin-bottom: 10px; height: 120px !important; display: flex; flex-direction: column; justify-content: center; }
 div[data-testid="stExpander"] summary p { font-size: 14px !important; font-weight: 400 !important; color: #2C3E50 !important; }
 
-/* ESTILOS GLOBALES PARA TABLAS HTML MATRICIALES */
+/* ESTILOS GLOBALES PARA TABLAS HTML MATRICIALES (ACTUALIZADOS) */
 .tabla-matricial { width: 100%; border-collapse: collapse; font-family: 'Inter', sans-serif; }
 .tabla-matricial th { background-color: #2980B9; color: #FFFFFF; text-align: center; padding: 8px; font-size: 12px; font-weight: 700; border: 1px solid #1A5276; }
 .tabla-matricial th.header-secundario { background-color: #F8F9F9; color: #7F8C8D; border-bottom: 2px solid #BDC3C7; border-color: #E0E6ED; }
+.tabla-matricial th.col-fija { width: 20%; min-width: 180px; text-align: left; padding-left: 15px; }
 .tabla-matricial td { background-color: #FFFFFF; color: #2C3E50; text-align: center; padding: 10px; font-size: 15px; font-weight: 700; border: 1px solid #E0E6ED; }
-.tabla-matricial td.col-equipo { background-color: #EAECEE; text-align: left; padding-left: 15px; font-weight: 800; color: #1A252F; }
+.tabla-matricial td.col-equipo { background-color: #F4F6F7; text-align: left; padding-left: 15px; font-size: 13px; font-weight: 600; color: #2C3E50; border: 1px solid #E0E6ED; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -315,7 +316,7 @@ with tab_gestion:
                 <table class="tabla-matricial">
                     <thead>
                         <tr>
-                            <th style="text-align: left; padding-left: 15px;">EQUIPO DE TRABAJO</th>
+                            <th class="col-fija">EQUIPO DE TRABAJO</th>
                             <th style="background-color: #27AE60;">TRÁMITE ACTIVO<br><span style="font-size:9px; font-weight:400;">(1-3 SEMANAS)</span></th>
                             <th style="background-color: #F39C12;">FLUJO LENTO<br><span style="font-size:9px; font-weight:400;">(1 A 5 MESES)</span></th>
                             <th style="background-color: #C0392B;">PARALIZADOS<br><span style="font-size:9px; font-weight:400;">(+6 MESES)</span></th>
@@ -377,7 +378,7 @@ with tab_gestion:
                     <table class="tabla-matricial">
                         <thead>
                             <tr>
-                                <th style="text-align: left; padding-left: 15px;">EQUIPO DE TRABAJO</th>
+                                <th class="col-fija">EQUIPO DE TRABAJO</th>
                 """
                 for a in list_años:
                     html_anio_eq += f"<th>{a}</th>"
@@ -451,7 +452,7 @@ with tab_gestion:
                 <table class="tabla-matricial">
                     <thead>
                         <tr>
-                            <th style="text-align: left; padding-left: 15px;">PROFESIONAL RESPONSABLE</th>
+                            <th class="col-fija">PROFESIONAL RESPONSABLE</th>
                             <th style="background-color: #27AE60;">TRÁMITE ACTIVO<br><span style="font-size:9px; font-weight:400;">(1-3 SEMANAS)</span></th>
                             <th style="background-color: #F39C12;">FLUJO LENTO<br><span style="font-size:9px; font-weight:400;">(1 A 5 MESES)</span></th>
                             <th style="background-color: #C0392B;">PARALIZADOS<br><span style="font-size:9px; font-weight:400;">(+6 MESES)</span></th>
@@ -513,7 +514,7 @@ with tab_gestion:
                     <table class="tabla-matricial">
                         <thead>
                             <tr>
-                                <th style="text-align: left; padding-left: 15px;">PROFESIONAL RESPONSABLE</th>
+                                <th class="col-fija">PROFESIONAL RESPONSABLE</th>
                 """
                 for a in list_años_eq:
                     html_anio_p += f"<th>{a}</th>"
