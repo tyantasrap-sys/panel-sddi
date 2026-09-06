@@ -104,7 +104,7 @@ def sincronizar_estados_sunarp(usuario_codigo):
 # ==============================================================================
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap');
 html, body, [class*="css"], .stApp { font-family: 'Inter', sans-serif !important; background-color: #F4F7F6 !important; }
 .block-container { padding-top: 2rem !important; padding-bottom: 2rem !important; }
 
@@ -135,13 +135,13 @@ a[href*="github.com"], a[href*="streamlit.io"] { pointer-events: none !important
 .tarjeta-equipo { background-color: #FFFFFF; padding: 12px 10px; border-radius: 10px; border-top: 4px solid #2980B9; box-shadow: 0 3px 8px rgba(0,0,0,0.04); text-align: center; margin-bottom: 10px; height: 120px !important; display: flex; flex-direction: column; justify-content: center; }
 div[data-testid="stExpander"] summary p { font-size: 14px !important; font-weight: 400 !important; color: #2C3E50 !important; }
 
-/* ESTILOS GLOBALES PARA TABLAS HTML MATRICIALES (ACTUALIZADOS) */
+/* ESTILOS GLOBALES PARA TABLAS HTML MATRICIALES (COMPACTADAS Y PROPORCIONALES) */
 .tabla-matricial { width: 100%; border-collapse: collapse; font-family: 'Inter', sans-serif; }
-.tabla-matricial th { background-color: #2980B9; color: #FFFFFF; text-align: center; padding: 8px; font-size: 12px; font-weight: 700; border: 1px solid #1A5276; }
-.tabla-matricial th.header-secundario { background-color: #F8F9F9; color: #7F8C8D; border-bottom: 2px solid #BDC3C7; border-color: #E0E6ED; }
-.tabla-matricial th.col-fija { width: 20%; min-width: 180px; text-align: left; padding-left: 15px; }
-.tabla-matricial td { background-color: #FFFFFF; color: #2C3E50; text-align: center; padding: 10px; font-size: 15px; font-weight: 700; border: 1px solid #E0E6ED; }
-.tabla-matricial td.col-equipo { background-color: #F4F6F7; text-align: left; padding-left: 15px; font-size: 13px; font-weight: 600; color: #2C3E50; border: 1px solid #E0E6ED; }
+.tabla-matricial th { background-color: #2980B9; color: #FFFFFF; text-align: center; padding: 6px 8px; font-size: 11px; font-weight: 700; border: 1px solid #1A5276; text-transform: uppercase; line-height: 1.2; }
+.tabla-matricial th.header-secundario { background-color: #F8F9F9; color: #7F8C8D; border-bottom: 2px solid #BDC3C7; border-color: #E0E6ED; font-size: 12px; }
+.tabla-matricial th.col-fija { width: auto; text-align: left; padding-left: 15px; white-space: nowrap; }
+.tabla-matricial td { background-color: #FFFFFF; color: #2C3E50; text-align: center; padding: 6px 10px; font-size: 15px; font-weight: 800; border: 1px solid #E0E6ED; }
+.tabla-matricial td.col-equipo { background-color: #F4F6F7; text-align: left; padding-left: 15px; font-size: 12px; font-weight: 700; color: #1A252F; border: 1px solid #E0E6ED; white-space: nowrap; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -312,14 +312,14 @@ with tab_gestion:
 
         with tab_acc_eq:
             html_acc = """
-            <div style="overflow-x: auto; margin: 10px auto 20px auto; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.04); border: 1px solid #BDC3C7; background-color: #FFFFFF;">
+            <div style="max-width: 900px; margin: 10px auto 20px auto; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.04); border: 1px solid #BDC3C7; background-color: #FFFFFF; overflow: hidden;">
                 <table class="tabla-matricial">
                     <thead>
                         <tr>
                             <th class="col-fija">EQUIPO DE TRABAJO</th>
-                            <th style="background-color: #27AE60;">TRÁMITE ACTIVO<br><span style="font-size:9px; font-weight:400;">(1-3 SEMANAS)</span></th>
-                            <th style="background-color: #F39C12;">FLUJO LENTO<br><span style="font-size:9px; font-weight:400;">(1 A 5 MESES)</span></th>
-                            <th style="background-color: #C0392B;">PARALIZADOS<br><span style="font-size:9px; font-weight:400;">(+6 MESES)</span></th>
+                            <th style="background-color: #27AE60;">TRÁMITE ACTIVO<br><span style="font-size:8px; font-weight:500; opacity:0.9;">(1-3 SEMANAS)</span></th>
+                            <th style="background-color: #F39C12;">FLUJO LENTO<br><span style="font-size:8px; font-weight:500; opacity:0.9;">(1 A 5 MESES)</span></th>
+                            <th style="background-color: #C0392B;">PARALIZADOS<br><span style="font-size:8px; font-weight:500; opacity:0.9;">(+6 MESES)</span></th>
                             <th style="background-color: #1F618D;">TOTAL EXP.</th>
                         </tr>
                     </thead>
@@ -448,14 +448,14 @@ with tab_gestion:
 
         with t_acc_prof:
             html_acc_p = """
-            <div style="overflow-x: auto; margin: 10px auto 20px auto; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.04); border: 1px solid #BDC3C7; background-color: #FFFFFF;">
+            <div style="max-width: 900px; margin: 10px auto 20px auto; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.04); border: 1px solid #BDC3C7; background-color: #FFFFFF; overflow: hidden;">
                 <table class="tabla-matricial">
                     <thead>
                         <tr>
                             <th class="col-fija">PROFESIONAL RESPONSABLE</th>
-                            <th style="background-color: #27AE60;">TRÁMITE ACTIVO<br><span style="font-size:9px; font-weight:400;">(1-3 SEMANAS)</span></th>
-                            <th style="background-color: #F39C12;">FLUJO LENTO<br><span style="font-size:9px; font-weight:400;">(1 A 5 MESES)</span></th>
-                            <th style="background-color: #C0392B;">PARALIZADOS<br><span style="font-size:9px; font-weight:400;">(+6 MESES)</span></th>
+                            <th style="background-color: #27AE60;">TRÁMITE ACTIVO<br><span style="font-size:8px; font-weight:500; opacity:0.9;">(1-3 SEMANAS)</span></th>
+                            <th style="background-color: #F39C12;">FLUJO LENTO<br><span style="font-size:8px; font-weight:500; opacity:0.9;">(1 A 5 MESES)</span></th>
+                            <th style="background-color: #C0392B;">PARALIZADOS<br><span style="font-size:8px; font-weight:500; opacity:0.9;">(+6 MESES)</span></th>
                             <th style="background-color: #1F618D;">TOTAL EXP.</th>
                         </tr>
                     </thead>
