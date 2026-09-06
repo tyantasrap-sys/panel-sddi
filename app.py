@@ -90,64 +90,88 @@ def sincronizar_estados_sunarp(usuario_codigo):
                     logging.info(f"RPA: Pestaña '{nombre_pestaña}' sincronizada correctamente.")
 
             except gspread.exceptions.WorksheetNotFound:
-                logging.warning(f"RPA: La pestaña '{nombre_pestaña}' no se encontró en el documento destino.")
                 continue
 
         return True
-
     except Exception as e:
-        logging.error(f"Fallo crítico en sincronización RPA: {e}")
         return False
 
 # ==============================================================================
-# FUNCIÓN DE VENTANA EMERGENTE (MODAL PARA PROCEDIMIENTOS)
+# FUNCIÓN DE VENTANA EMERGENTE (MODAL MAESTRO MULTI-TABLA)
 # ==============================================================================
 @st.dialog("📄 Detalle de Expedientes Solicitados", width="large")
-def mostrar_modal_detalle(proc, anio, df_base):
-    st.markdown(f"<h5 style='color:#2980B9; margin-top:0;'>Procedimiento: {proc} | Año: {anio}</h5>", unsafe_allow_html=True)
+def mostrar_modal_detalle(tipo_clic, param1, param2, df_base):
+    df_modal = df_base.copy()
+    
+    # 1. Enrutador del Filtro (Dependiendo de qué tabla se clickeó)
+    if tipo_clic == "PROC":
+        st.markdown(f"<h5 style='color:#2980B9; margin-top:0;'>Procedimiento: {param1} | Año: {param2}</h5>", unsafe_allow_html=True)
+        if param1 != 'TOTAL': df_modal = df_modal[df_modal.iloc[:, 10].astype(str).str.strip().str.upper() == param1.upper()]
+        if param2 != 'TOTAL': df_modal = df_modal[df_modal.iloc[:, 9].astype(str).str.extract(r'((?:19|20)\d{2})')[0] == str(param2)]
+        
+    elif tipo_clic == "ACCION":
+        st.markdown(f"<h5 style='color:#2980B9; margin-top:0;'>Equipo: {param1} | Estado: {param2}</h5>", unsafe_allow_html=True)
+        if param1 != 'TOTAL': df_modal = df_modal[df_modal["Equipo"] == param1]
+        if param2 == 'ACTIVO': df_modal = df_modal[df_modal["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False)]
+        elif param2 == 'LENTO': df_modal = df_modal[df_modal["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df_modal["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False)]
+        elif param2 == 'PARALIZADO': df_modal = df_modal[df_modal["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)]
+        
+    elif tipo_clic == "ANIO_EQ":
+        st.markdown(f"<h5 style='color:#2980B9; margin-top:0;'>Equipo: {param1} | Año: {param2}</h5>", unsafe_allow_html=True)
+        if param1 != 'TOTAL': df_modal = df_modal[df_modal["Equipo"] == param1]
+        if param2 != 'TOTAL': df_modal = df_modal[df_modal.iloc[:, 9].astype(str).str.extract(r'((?:19|20)\d{2})')[0] == str(param2)]
+
+    elif tipo_clic == "ACCION_PROF":
+        st.markdown(f"<h5 style='color:#2980B9; margin-top:0;'>Profesional: {param1} | Estado: {param2}</h5>", unsafe_allow_html=True)
+        if param1 != 'TOTAL': df_modal = df_modal[df_modal["Profesional"] == param1]
+        if param2 == 'ACTIVO': df_modal = df_modal[df_modal["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False)]
+        elif param2 == 'LENTO': df_modal = df_modal[df_modal["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df_modal["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False)]
+        elif param2 == 'PARALIZADO': df_modal = df_modal[df_modal["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)]
+
+    elif tipo_clic == "ANIO_PROF":
+        st.markdown(f"<h5 style='color:#2980B9; margin-top:0;'>Profesional: {param1} | Año: {param2}</h5>", unsafe_allow_html=True)
+        if param1 != 'TOTAL': df_modal = df_modal[df_modal["Profesional"] == param1]
+        if param2 != 'TOTAL': df_modal = df_modal[df_modal.iloc[:, 9].astype(str).str.extract(r'((?:19|20)\d{2})')[0] == str(param2)]
     
     if len(df_base.columns) >= 13:
-        # Construimos el DataFrame de forma híbrida para evitar desfases del CSV
-        df_modal = pd.DataFrame()
-        df_modal["Expediente"] = df_base.iloc[:, 0]
-        df_modal["Profesional"] = df_base.iloc[:, 7]
-        df_modal["Año"] = df_base.iloc[:, 9]
-        df_modal["Procedimiento"] = df_base.iloc[:, 10]
-        df_modal["Administrado"] = df_base.iloc[:, 11]
-        df_modal["Estado"] = df_base.iloc[:, 12]
+        # 2. Extracción de Columnas Exactas
+        df_final = pd.DataFrame()
+        df_final["Expediente"] = df_modal.iloc[:, 0]               # Columna A
+        df_final["Profesional"] = df_modal.iloc[:, 7]              # Columna H
+        df_final["Año"] = df_modal.iloc[:, 9].astype(str).str.extract(r'((?:19|20)\d{2})')[0].fillna("S/F") # Columna J
+        df_final["Procedimiento"] = df_modal.iloc[:, 10]           # Columna K
+        df_final["Administrado"] = df_modal.iloc[:, 11]            # Columna L
+        df_final["Estado"] = df_modal.iloc[:, 12]                  # Columna M
+        df_final["Fecha_Ultima_Accion"] = df_modal.iloc[:, 3]      # Columna D
         
-        # Extracción segura de la columna Trazabilidad usando su nombre exacto
-        if "Trazabilidad" in df_base.columns:
-            df_modal["Trazabilidad_Oculta"] = df_base["Trazabilidad"]
-        else:
-            df_modal["Trazabilidad_Oculta"] = df_base.iloc[:, 5]
-            
-        # Filtramos los datos del clic
-        if proc != 'TOTAL':
-            df_modal = df_modal[df_modal["Procedimiento"].astype(str).str.strip().str.upper() == proc.upper()]
-        if anio != 'TOTAL':
-            df_modal = df_modal[df_modal["Año"].astype(str) == str(anio)]
-            
-        # REGLA DE ANONIMIZACIÓN (Protección de Datos Personales)
-        mask_compraventa = df_modal["Procedimiento"].astype(str).str.upper().str.contains("COMPRAVENTA")
+        # 3. REGLA DE ANONIMIZACIÓN (Protección de Datos Personales)
+        mask_compraventa = df_final["Procedimiento"].astype(str).str.upper().str.contains("COMPRAVENTA")
         palabras_entidad = "MUNICIPALIDAD|GOBIERNO|MINISTERIO|S\.A\.|S\.A\.C\.|S\.R\.L\.|E\.I\.R\.L\.|ASOCIACION|EMPRESA|COMUNIDAD|CONSORCIO|DIRECCION|SUPERINTENDENCIA|UNIVERSIDAD|COOPERATIVA|SINDICATO|PROYECTO|IGLESIA|COMITE|JUNTA"
-        mask_juridica = df_modal["Administrado"].astype(str).str.upper().str.contains(palabras_entidad, na=False)
+        mask_juridica = df_final["Administrado"].astype(str).str.upper().str.contains(palabras_entidad, na=False)
         
         mask_ocultar = mask_compraventa & ~mask_juridica
-        df_modal.loc[mask_ocultar, "Administrado"] = "PERSONA NATURAL"
+        df_final.loc[mask_ocultar, "Administrado"] = "PERSONA NATURAL"
         
-        # REGLA PARA LA 7MA COLUMNA: ESTADO DE ALERTA POR TRAZABILIDAD
-        def calcular_alerta(val):
-            v = str(val).lower()
-            if "semana" in v: return "🟢 Trámite Activo"
-            elif "año" in v or "6 meses" in v or "no se encontro resultado" in v: return "🔴 Paralizado"
-            elif "mes" in v: return "🟡 Flujo Lento"
-            return "⚪ Sin Datos"
-            
-        df_modal["Alerta Visual"] = df_modal["Trazabilidad_Oculta"].apply(calcular_alerta)
+        # 4. CÁLCULO MATEMÁTICO: DÍAS CALENDARIO (Desde Columna D)
+        hoy = pd.Timestamp.today().normalize()
         
-        # Ocultamos la trazabilidad cruda y mostramos la estructura limpia final
-        df_mostrar = df_modal[["Expediente", "Profesional", "Año", "Procedimiento", "Administrado", "Estado", "Alerta Visual"]]
+        def calcular_dias(fecha_str):
+            if pd.isna(fecha_str) or str(fecha_str).strip() in ["-", ""]:
+                return "-"
+            try:
+                # Intenta convertir el texto DD/MM/YYYY a formato de Fecha
+                fecha = pd.to_datetime(str(fecha_str).strip(), format='%d/%m/%Y', errors='coerce')
+                if pd.isna(fecha):
+                    return "-"
+                dias = (hoy - fecha).days
+                return f"{max(0, dias)} días"
+            except:
+                return "-"
+                
+        df_final["Días Calendario"] = df_final["Fecha_Ultima_Accion"].apply(calcular_dias)
+        
+        # Ocultamos la columna técnica de fecha y mostramos el resultado
+        df_mostrar = df_final[["Expediente", "Profesional", "Año", "Procedimiento", "Administrado", "Estado", "Días Calendario"]]
         
         st.dataframe(df_mostrar, use_container_width=True, hide_index=True)
     else:
@@ -182,7 +206,7 @@ a[href*="github.com"], a[href*="streamlit.io"] { pointer-events: none !important
 .tarjeta-titulo { color: #7F8C8D; font-size: 10px; margin: 0; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; min-height: 18px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px; line-height: 1.1; pointer-events: none; }
 .tarjeta-valor { color: #2C3E50; font-size: 24px; margin: 0 !important; font-weight: 700; line-height: 1; pointer-events: none; }
 
-/* CLASES INTERACTIVAS */
+/* CLASES INTERACTIVAS MEJORADAS PARA ACTIVAR MODALES EN TODAS LAS TABLAS */
 .tarjeta-clic { cursor: pointer; transition: all 0.2s ease; }
 .tarjeta-clic:hover { transform: translateY(-3px); box-shadow: 0 6px 12px rgba(0,0,0,0.15) !important; z-index: 10; background-color: #FDFEFE !important; }
 
@@ -195,7 +219,7 @@ a[href*="github.com"], a[href*="streamlit.io"] { pointer-events: none !important
 .tarjeta-equipo { background-color: #FFFFFF; padding: 12px 10px; border-radius: 10px; border-top: 4px solid #2980B9; box-shadow: 0 3px 8px rgba(0,0,0,0.04); text-align: center; margin-bottom: 10px; height: 120px !important; display: flex; flex-direction: column; justify-content: center; }
 div[data-testid="stExpander"] summary p { font-size: 14px !important; font-weight: 400 !important; color: #2C3E50 !important; }
 
-/* ESTILOS GLOBALES PARA TABLAS HTML MATRICIALES (COMPACTADAS Y PROPORCIONALES) */
+/* ESTILOS GLOBALES PARA TABLAS HTML MATRICIALES */
 .tabla-matricial { width: 100%; min-width: 750px; border-collapse: collapse; font-family: 'Inter', sans-serif; }
 .tabla-matricial th { background-color: #2980B9; color: #FFFFFF; text-align: center; padding: 6px 8px; font-size: 11px; font-weight: 700; border: 1px solid #1A5276; text-transform: uppercase; line-height: 1.2; }
 .tabla-matricial th.header-secundario { background-color: #F8F9F9; color: #7F8C8D; border-bottom: 2px solid #BDC3C7; border-color: #E0E6ED; font-size: 12px; }
@@ -270,15 +294,10 @@ def cargar_datos_sunarp():
     url_sunarp = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTFQiw1QtTommj03HEMC0mQEQHYuyoluv9K0UP9u6GJDntCAjzOnk77RD_Plx8MoPgktulWknPjIoxd/pub?gid=0&single=true&output=csv"
     df_s = pd.read_csv(url_sunarp)
     df_s.columns = df_s.columns.str.strip().str.upper()
-    
     mapeo_usuarios = {
-        "CAROLINA": "MCHAVEZ",
-        "VICTOR": "VGAMARRA",
-        "VALERIA": "VESPADIN",
-        "RICARDO": "RJIMENEZ",
-        "KATHERINE": "KPAJUELO"
+        "CAROLINA": "MCHAVEZ", "VICTOR": "VGAMARRA", "VALERIA": "VESPADIN",
+        "RICARDO": "RJIMENEZ", "KATHERINE": "KPAJUELO"
     }
-    
     if "USUARIO" in df_s.columns:
         df_s["USUARIO_MAPEADO"] = df_s["USUARIO"].astype(str).str.strip().str.upper().map(mapeo_usuarios).fillna(df_s["USUARIO"])
     return df_s
@@ -288,14 +307,12 @@ def clasificar_estados_sunarp(df_base, usuarios):
     try:
         if "USUARIO_MAPEADO" not in df_base.columns or "ESTADO" not in df_base.columns:
             return metricas
-
         for usu in usuarios:
             df_usu = df_base[df_base["USUARIO_MAPEADO"] == usu].copy()
             total = len(df_usu)
             if total == 0: continue
 
             estados = df_usu["ESTADO"].astype(str).str.upper().str.strip()
-            
             insc = int(estados.str.contains("INSCRITO", case=False, na=False).sum())
             calif = int(estados.str.contains("CALIFICACIÓN|CALIFICACION", case=False, na=False).sum())
             tach = int(estados.str.contains("TACHADO", case=False, na=False).sum())
@@ -303,13 +320,11 @@ def clasificar_estados_sunarp(df_base, usuarios):
             liq = int(estados.str.contains("LIQUIDADO", case=False, na=False).sum())
             reing = int(estados.str.contains("REINGRESADO", case=False, na=False).sum())
             en_proc = int(estados.str.contains("EN PROCESO", case=False, na=False).sum())
-            
             mask_conocidos = estados.str.contains("INSCRITO|CALIFICACIÓN|CALIFICACION|TACHADO|OBSERVADO|LIQUIDADO|REINGRESADO|EN PROCESO", case=False, na=False)
             otros = int((~mask_conocidos & (estados != "NAN") & (estados != "")).sum())
             
             metricas.append({
-                "Usuario": usu, 
-                "Total": total,
+                "Usuario": usu, "Total": total,
                 "Tarjetas": {
                     "Inscritos": {"valor": insc, "bg": "#28B463", "color": "#FFFFFF"},
                     "En Calificación": {"valor": calif, "bg": "#3498DB", "color": "#FFFFFF"},
@@ -354,7 +369,7 @@ with tab_gestion:
         st.error("Error al conectar con la base de datos de Gestión.")
         st.stop()
         
-    # INYECCIÓN DEL CAMPO OCULTO PARA EL MODAL DE PROCEDIMIENTOS
+    # INYECCIÓN DEL CAMPO OCULTO PARA RECEPCIÓN DE TODOS LOS MODALES
     st.markdown("<div style='display:none; height:0; overflow:hidden;'>", unsafe_allow_html=True)
     modal_trigger = st.text_input("modal_trigger", key="modal_trigger_input", label_visibility="hidden")
     st.markdown("</div>", unsafe_allow_html=True)
@@ -365,8 +380,9 @@ with tab_gestion:
     if modal_trigger and modal_trigger != st.session_state.last_trigger:
         st.session_state.last_trigger = modal_trigger
         parts = modal_trigger.split("|||")
-        if len(parts) >= 2:
-            mostrar_modal_detalle(parts[0], parts[1], df)
+        # El formato JS envía: TIPO ||| PARAM1 ||| PARAM2 ||| TIMESTAMP
+        if len(parts) >= 3:
+            mostrar_modal_detalle(parts[0], parts[1], parts[2], df)
 
     equipos_lista = sorted(df["Equipo"].dropna().astype(str).unique().tolist())
 
@@ -374,7 +390,7 @@ with tab_gestion:
         mostrar_encabezado("Gestión de Expedientes SDDI", "Gestión y seguimiento de expedientes en trámite a nivel nacional.", mostrar_volver=False)
 
         # ==============================================================================
-        # BLOQUE 1: ÚLTIMA ACCIÓN REALIZADA 
+        # BLOQUE 1: ÚLTIMA ACCIÓN REALIZADA (CAPA 1)
         # ==============================================================================
         st.markdown("<h4 style='color:#2C3E50; margin-bottom:5px;'>📌 Expedientes por última acción realizada</h4>", unsafe_allow_html=True)
         tab_acc_gen, tab_acc_eq = st.tabs(["📊 Resumen General", "🏢 Comparativo por Equipos"])
@@ -408,12 +424,13 @@ with tab_gestion:
                 t_len = df_e[df_e["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df_e["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False)].shape[0]
                 t_par = df_e[df_e["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)].shape[0]
                 
+                # Se aplica celda-accion-modal para que dispare el modal en lugar del salto a Capa 2
                 html_acc += f"<tr>"
-                html_acc += f"<td class='col-equipo celda-equipo-clic celda-acciones-clic' data-equipo='{eq}'>{eq}</td>"
-                html_acc += f"<td class='celda-equipo-clic celda-acciones-clic' data-equipo='{eq}'>{t_act}</td>"
-                html_acc += f"<td class='celda-equipo-clic celda-acciones-clic' data-equipo='{eq}'>{t_len}</td>"
-                html_acc += f"<td class='celda-equipo-clic celda-acciones-clic' data-equipo='{eq}'>{t_par}</td>"
-                html_acc += f"<td class='celda-equipo-clic celda-acciones-clic' data-equipo='{eq}' style='font-weight:900;'>{t_tot}</td>"
+                html_acc += f"<td class='col-equipo celda-equipo-clic celda-accion-modal' data-equipo='{eq}' data-tipo='TOTAL'>{eq}</td>"
+                html_acc += f"<td class='celda-equipo-clic celda-accion-modal' data-equipo='{eq}' data-tipo='ACTIVO'>{t_act}</td>"
+                html_acc += f"<td class='celda-equipo-clic celda-accion-modal' data-equipo='{eq}' data-tipo='LENTO'>{t_len}</td>"
+                html_acc += f"<td class='celda-equipo-clic celda-accion-modal' data-equipo='{eq}' data-tipo='PARALIZADO'>{t_par}</td>"
+                html_acc += f"<td class='celda-equipo-clic celda-accion-modal' data-equipo='{eq}' data-tipo='TOTAL' style='font-weight:900;'>{t_tot}</td>"
                 html_acc += f"</tr>"
             
             html_acc += "</tbody></table></div>"
@@ -458,7 +475,6 @@ with tab_gestion:
                 
             with tab_anio_proc:
                 list_años = df['Año_Temp'].value_counts().sort_index(ascending=True).index.tolist()
-                
                 procedimientos_ordenados = df['Procedimiento_Temp'].value_counts().index.tolist()
                 
                 html_anio_proc = """
@@ -475,7 +491,7 @@ with tab_gestion:
                 for proc in procedimientos_ordenados:
                     df_pr = df[df['Procedimiento_Temp'] == proc]
                     conteo_pr = df_pr['Año_Temp'].value_counts()
-                    html_anio_proc += f"<tr><td class='col-proc'>{proc}</td>"
+                    html_anio_proc += f"<tr><td class='col-proc celda-proc-clic' data-proc='{proc}' data-anio='TOTAL'>{proc}</td>"
                     
                     for a in list_años:
                         val = conteo_pr.get(a, 0)
@@ -510,12 +526,15 @@ with tab_gestion:
                 for eq in equipos_lista:
                     df_e = df[df["Equipo"] == eq]
                     conteo_e = df_e['Año_Temp'].value_counts()
-                    html_anio_eq += f"<tr><td class='col-equipo celda-equipo-clic celda-anios-clic' data-equipo='{eq}'>{eq}</td>"
+                    html_anio_eq += f"<tr><td class='col-equipo celda-equipo-clic celda-anio-modal' data-equipo='{eq}' data-anio='TOTAL'>{eq}</td>"
                     for a in list_años:
                         val = conteo_e.get(a, 0)
                         txt = str(val) if val > 0 else "-"
-                        html_anio_eq += f"<td class='celda-equipo-clic celda-anios-clic' data-equipo='{eq}'>{txt}</td>"
-                    html_anio_eq += f"<td class='celda-equipo-clic celda-anios-clic' data-equipo='{eq}' style='font-weight:900;'>{len(df_e)}</td></tr>"
+                        if val > 0:
+                            html_anio_eq += f"<td class='celda-equipo-clic celda-anio-modal' data-equipo='{eq}' data-anio='{a}'>{txt}</td>"
+                        else:
+                            html_anio_eq += f"<td>{txt}</td>"
+                    html_anio_eq += f"<td class='celda-equipo-clic celda-anio-modal' data-equipo='{eq}' data-anio='TOTAL' style='font-weight:900;'>{len(df_e)}</td></tr>"
                 
                 html_anio_eq += "</tbody></table></div>"
                 st.markdown(html_anio_eq, unsafe_allow_html=True)
@@ -524,7 +543,7 @@ with tab_gestion:
             st.info("Faltan columnas en la base de datos para mostrar la información por Año y Procedimiento.")
 
         # ==============================================================================
-        # BLOQUE 3: EQUIPOS DE TRABAJO
+        # BLOQUE 3: EQUIPOS DE TRABAJO (BOTONES DE VER REPORTE SE MANTIENEN)
         # ==============================================================================
         st.markdown("<hr style='border:none; border-top:1px solid #E0E6ED; margin:15px 0 20px 0;'>", unsafe_allow_html=True)
         st.markdown("<h4 style='color:#2C3E50; text-align:center;'>Carga General por Equipos de Trabajo</h4><br>", unsafe_allow_html=True)
@@ -547,20 +566,13 @@ with tab_gestion:
                     st.rerun()
 
     # ==============================================================================
-    # VISTA CAPA 2 (DETALLE DE EQUIPO)
+    # VISTA CAPA 2 (DETALLE DE EQUIPO - MATRICES POR PROFESIONAL)
     # ==============================================================================
     elif st.session_state.capa_actual == 2:
         
         components.html("""
         <script>
-        setTimeout(function() {
-            const anchor = window.parent.document.getElementById('ancla-top');
-            if(anchor) {
-                anchor.scrollIntoView({behavior: 'instant', block: 'start'});
-            } else {
-                window.parent.scrollTo(0, 0);
-            }
-        }, 150);
+        setTimeout(function() { window.parent.scrollTo(0, 0); }, 150);
         </script>
         """, height=0, width=0)
         
@@ -570,10 +582,6 @@ with tab_gestion:
         
         mostrar_encabezado(f"Reporte Dinámico: {eq_sel}", "Evaluación detallada de estados y carga por especialista.", mostrar_volver=True)
 
-        # ------------------------------------------------------------------------------
-        # CAPA 2 - BLOQUE 1: ÚLTIMA ACCIÓN REALIZADA
-        # ------------------------------------------------------------------------------
-        st.markdown("<div id='ancla-acciones'></div>", unsafe_allow_html=True)
         st.markdown("<h4 style='color:#2C3E50; margin-bottom:5px;'>📌 Expedientes por última acción realizada</h4>", unsafe_allow_html=True)
         t_acc_gen_prof, t_acc_prof = st.tabs(["📊 Resumen General", "👨‍💼 Por Profesional"])
         
@@ -605,16 +613,19 @@ with tab_gestion:
                 p_act = df_pr[df_pr["Trazabilidad"].astype(str).str.contains("semana", case=False, na=False)].shape[0]
                 p_len = df_pr[df_pr["Trazabilidad"].astype(str).str.contains("mes", case=False, na=False) & ~df_pr["Trazabilidad"].astype(str).str.contains("6 meses", case=False, na=False)].shape[0]
                 p_par = df_pr[df_pr["Trazabilidad"].astype(str).str.contains("año|6 meses|no se encontro resultado", case=False, na=False)].shape[0]
-                html_acc_p += f"<tr><td class='col-equipo'>{prof}</td><td>{p_act}</td><td>{p_len}</td><td>{p_par}</td><td style='font-weight:900;'>{p_tot}</td></tr>"
+                
+                html_acc_p += f"<tr>"
+                html_acc_p += f"<td class='col-equipo celda-equipo-clic celda-accion-prof-modal' data-prof='{prof}' data-tipo='TOTAL'>{prof}</td>"
+                html_acc_p += f"<td class='celda-equipo-clic celda-accion-prof-modal' data-prof='{prof}' data-tipo='ACTIVO'>{p_act}</td>"
+                html_acc_p += f"<td class='celda-equipo-clic celda-accion-prof-modal' data-prof='{prof}' data-tipo='LENTO'>{p_len}</td>"
+                html_acc_p += f"<td class='celda-equipo-clic celda-accion-prof-modal' data-prof='{prof}' data-tipo='PARALIZADO'>{p_par}</td>"
+                html_acc_p += f"<td class='celda-equipo-clic celda-accion-prof-modal' data-prof='{prof}' data-tipo='TOTAL' style='font-weight:900;'>{p_tot}</td>"
+                html_acc_p += f"</tr>"
             
             html_acc_p += "</tbody></table></div>"
             st.markdown(html_acc_p, unsafe_allow_html=True)
 
-        # ------------------------------------------------------------------------------
-        # CAPA 2 - BLOQUE 2: AÑO DE CREACIÓN
-        # ------------------------------------------------------------------------------
         st.markdown("<hr style='border:none; border-top:1px dashed #E0E6ED; margin:25px 0 15px 0;'>", unsafe_allow_html=True)
-        st.markdown("<div id='ancla-anios'></div>", unsafe_allow_html=True)
         st.markdown("<h4 style='color:#2C3E50; margin-bottom:5px;'>📅 Expedientes por año de creación</h4>", unsafe_allow_html=True)
         
         t_anio_gen_prof, t_anio_prof = st.tabs(["📊 Resumen General", "👨‍💼 Por Profesional"])
@@ -662,24 +673,20 @@ with tab_gestion:
                 for prof in profesionales_lista:
                     df_pr = df_eq[df_eq["Profesional"] == prof]
                     conteo_pr = df_pr['Año_Temp'].value_counts()
-                    html_anio_p += f"<tr><td class='col-equipo'>{prof}</td>"
+                    html_anio_p += f"<tr><td class='col-equipo celda-equipo-clic celda-anio-prof-modal' data-prof='{prof}' data-anio='TOTAL'>{prof}</td>"
                     for a in list_años_eq:
                         val = conteo_pr.get(a, 0)
                         txt = str(val) if val > 0 else "-"
-                        html_anio_p += f"<td>{txt}</td>"
-                    html_anio_p += f"<td style='font-weight:900;'>{len(df_pr)}</td></tr>"
+                        if val > 0:
+                            html_anio_p += f"<td class='celda-equipo-clic celda-anio-prof-modal' data-prof='{prof}' data-anio='{a}'>{txt}</td>"
+                        else:
+                            html_anio_p += f"<td>{txt}</td>"
+                    html_anio_p += f"<td class='celda-equipo-clic celda-anio-prof-modal' data-prof='{prof}' data-anio='TOTAL' style='font-weight:900;'>{len(df_pr)}</td></tr>"
                 
                 html_anio_p += "</tbody></table></div>"
                 st.markdown(html_anio_p, unsafe_allow_html=True)
-                
-        else:
-            st.info("La columna J no está disponible para clasificar por años.")
 
-        # ------------------------------------------------------------------------------
-        # CAPA 2 - BLOQUE 3: RELACIÓN DE PROFESIONALES (EXPANSORES)
-        # ------------------------------------------------------------------------------
         st.markdown("<hr style='border:none; border-top:1px solid #E0E6ED; margin:20px 0;'><h4 style='color:#2C3E50;'>👨‍💼 Relación de Profesionales</h4>", unsafe_allow_html=True)
-
         for prof in profesionales_lista:
             df_p = df_eq[df_eq["Profesional"] == prof]
             
@@ -740,211 +747,83 @@ with tab_gestion:
                             with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
                                 columnas_exportar = [col for col in df_m.columns if col != "URL_Tramite"]
                                 df_m[columnas_exportar].to_excel(writer, index=False, sheet_name='Expedientes')
-                            
-                            st.download_button(
-                                label="📥 Bajar Excel",
-                                data=buffer.getvalue(),
-                                file_name=f"Reporte_{prof}_{f_actual}.xlsx",
-                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                use_container_width=True
-                            )
+                            st.download_button("📥 Bajar Excel", data=buffer.getvalue(), file_name=f"Reporte_{prof}_{f_actual}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
                             st.markdown("<div style='margin-bottom: 5px;'></div>", unsafe_allow_html=True)
                             if st.button("❌ Cerrar lista", key=f"c_{prof}", use_container_width=True):
                                 st.session_state[f"f_{prof}"] = "Oculto"
                                 st.rerun()
 
                         with col_t:
-                            st.dataframe(
-                                df_m[existentes], 
-                                use_container_width=True, 
-                                hide_index=True,
-                                column_config={"URL_Tramite": st.column_config.LinkColumn("🔗 Acción", display_text="Abrir Trámite")}
-                            )
+                            st.dataframe(df_m[existentes], use_container_width=True, hide_index=True, column_config={"URL_Tramite": st.column_config.LinkColumn("🔗 Acción", display_text="Abrir Trámite")})
                     else:
                         st.info("No hay expedientes en esta categoría.")
-        
-        # ------------------------------------------------------------------------------
-        # CAPA 2 - BLOQUE 4: SEGUIMIENTO TÍTULOS SUNARP (SOLO TRANSVERSAL)
-        # ------------------------------------------------------------------------------
-        if eq_sel == "Transversal":
-            st.markdown("<hr style='border:none; border-top:1px solid #E0E6ED; margin:40px 0 20px 0;'><h4 style='color:#2C3E50;'>🏢 Seguimiento Títulos SUNARP</h4>", unsafe_allow_html=True)
-            
-            try:
-                with st.spinner("Sincronizando base de datos registral..."):
-                    df_sunarp = cargar_datos_sunarp()
-            except Exception as e:
-                st.error("Error crítico: Fallo de conexión.")
-                df_sunarp = pd.DataFrame()
-
-            if not df_sunarp.empty:
-                usuarios_sunarp = ["VESPADIN", "VGAMARRA", "MCHAVEZ", "RJIMENEZ", "KPAJUELO"]
-                datos_procesados = clasificar_estados_sunarp(df_sunarp, usuarios_sunarp)
-                
-                for data in datos_procesados:
-                    usu = data["Usuario"]
-                    
-                    with st.expander(f"👤 {usu} — Total: {data['Total']} títulos asignados", expanded=False):
-                        estados_activos = {k: v for k, v in data["Tarjetas"].items() if v["valor"] > 0}
-                        
-                        if estados_activos:
-                            columnas_tarjetas = st.columns(12)
-                            idx_col = 0
-                            for etiqueta, config in estados_activos.items():
-                                with columnas_tarjetas[idx_col % 12]:
-                                    st.markdown(generar_tarjeta_html(etiqueta, config), unsafe_allow_html=True)
-                                idx_col += 1
-                            
-                            st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
-                            _, col_btn = st.columns([10, 2])
-                            with col_btn:
-                                if st.button("Actualizar Estado", key=f"btn_rpa_{usu}", type="secondary", use_container_width=True):
-                                    with st.spinner("Conectando con Google Sheets y transfiriendo datos..."):
-                                        exito = sincronizar_estados_sunarp(usu)
-                                        if exito:
-                                            st.success("Carga Exitosa")
-                                            st.rerun()
-                        else:
-                            st.info("No existen estados procesados.")
 
 # ==============================================================================
-# INYECCIÓN JAVASCRIPT GLOBAL PARA CLICS E INTERACTIVIDAD DE NAVEGACIÓN Y MODALES
+# INYECCIÓN JAVASCRIPT: NUEVO ENRUTAMIENTO DIRECTO A VENTANAS EMERGENTES (MODALES)
 # ==============================================================================
 components.html("""
 <script>
 setTimeout(function() {
     const parentDOM = window.parent.document;
     
-    // -----------------------------------------------------------
-    // 1. CAPTURAR CLICS EN LA CAPA 1 PARA NAVEGAR A LA CAPA 2
-    // -----------------------------------------------------------
-    
-    // Clics en la tabla de Última Acción (Capa 1)
-    const celdasAcciones = parentDOM.querySelectorAll('.celda-acciones-clic');
-    celdasAcciones.forEach(el => {
-        el.onclick = function() {
-            const equipoInfo = el.getAttribute('data-equipo');
-            const btns = Array.from(parentDOM.querySelectorAll('button'));
-            const btnVerReporte = btns.find(b => b.textContent.includes('Ver Reporte: ' + equipoInfo));
-            if(btnVerReporte) {
-                window.sessionStorage.setItem('scroll_target', 'acciones');
-                btnVerReporte.click();
-            }
-        };
-    });
-
-    // Clics en la tabla de Años (Capa 1)
-    const celdasAnios = parentDOM.querySelectorAll('.celda-anios-clic');
-    celdasAnios.forEach(el => {
-        el.onclick = function() {
-            const equipoInfo = el.getAttribute('data-equipo');
-            const btns = Array.from(parentDOM.querySelectorAll('button'));
-            const btnVerReporte = btns.find(b => b.textContent.includes('Ver Reporte: ' + equipoInfo));
-            if(btnVerReporte) {
-                window.sessionStorage.setItem('scroll_target', 'anios');
-                btnVerReporte.click();
-            }
-        };
-    });
-
-    // Clic en los botones directos "Ver Reporte" (Forzar tope)
-    const btnsReporte = Array.from(parentDOM.querySelectorAll('button')).filter(b => b.textContent.includes('Ver Reporte: '));
-    btnsReporte.forEach(btn => {
-        btn.addEventListener('click', function(e) {
-            if(!window.sessionStorage.getItem('scroll_target')) {
-                window.sessionStorage.setItem('scroll_target', 'top');
-            }
-        });
-    });
-
-    // -----------------------------------------------------------
-    // 2. EJECUTAR EL SCROLL Y ABRIR PESTAÑAS AL ENTRAR A CAPA 2
-    // -----------------------------------------------------------
-    const target = window.sessionStorage.getItem('scroll_target');
-    if (target) {
-        if (target === 'acciones') {
-            const anchor = parentDOM.getElementById('ancla-acciones');
-            if (anchor) anchor.scrollIntoView({behavior: 'smooth', block: 'start'});
-            
-            const tabs = Array.from(parentDOM.querySelectorAll('[role="tab"]'));
-            const profTabs = tabs.filter(t => t.textContent.includes('Por Profesional'));
-            if(profTabs.length > 0) profTabs[0].click();
-            
-        } else if (target === 'anios') {
-            const anchor = parentDOM.getElementById('ancla-anios');
-            if (anchor) anchor.scrollIntoView({behavior: 'smooth', block: 'start'});
-            
-            const tabs = Array.from(parentDOM.querySelectorAll('[role="tab"]'));
-            const profTabs = tabs.filter(t => t.textContent.includes('Por Profesional'));
-            if(profTabs.length > 1) profTabs[1].click();
-            
-        } else if (target === 'top') {
-            const anchorTop = parentDOM.getElementById('ancla-top');
-            if (anchorTop) {
-                anchorTop.scrollIntoView({behavior: 'smooth', block: 'start'});
-            } else {
-                window.parent.scrollTo({top: 0, behavior: 'smooth'});
-            }
+    // Función Maestra para inyectar datos al backend y abrir Modales
+    function triggerModal(type, p1, p2) {
+        const inputs = parentDOM.querySelectorAll('input[aria-label="modal_trigger"]');
+        if(inputs.length > 0) {
+            const input = inputs[0];
+            const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+            nativeInputValueSetter.call(input, type + "|||" + p1 + "|||" + p2 + "|||" + Date.now());
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
         }
-        
-        window.sessionStorage.removeItem('scroll_target');
     }
 
-    // -----------------------------------------------------------
-    // 3. CAMBIO DE PESTAÑAS DENTRO DE LA MISMA VISTA (TARJETAS)
-    // -----------------------------------------------------------
-    const tAccionesGen = parentDOM.querySelectorAll('.tarjeta-clic-acciones');
-    tAccionesGen.forEach(el => {
+    // 1. Enlace de Clics: CAPA 1 (Tablas por Equipos)
+    parentDOM.querySelectorAll('.celda-accion-modal').forEach(el => {
+        el.onclick = function() { triggerModal('ACCION', el.getAttribute('data-equipo'), el.getAttribute('data-tipo')); };
+    });
+    parentDOM.querySelectorAll('.celda-anio-modal').forEach(el => {
+        el.onclick = function() { triggerModal('ANIO_EQ', el.getAttribute('data-equipo'), el.getAttribute('data-anio')); };
+    });
+    parentDOM.querySelectorAll('.celda-proc-clic').forEach(el => {
+        el.onclick = function() { triggerModal('PROC', el.getAttribute('data-proc'), el.getAttribute('data-anio')); };
+    });
+
+    // 2. Enlace de Clics: CAPA 2 (Tablas por Profesional)
+    parentDOM.querySelectorAll('.celda-accion-prof-modal').forEach(el => {
+        el.onclick = function() { triggerModal('ACCION_PROF', el.getAttribute('data-prof'), el.getAttribute('data-tipo')); };
+    });
+    parentDOM.querySelectorAll('.celda-anio-prof-modal').forEach(el => {
+        el.onclick = function() { triggerModal('ANIO_PROF', el.getAttribute('data-prof'), el.getAttribute('data-anio')); };
+    });
+
+    // 3. CAMBIO DE PESTAÑAS (Métricas Superiores)
+    parentDOM.querySelectorAll('.tarjeta-clic-acciones').forEach(el => {
         el.onclick = function() {
             const tabs = Array.from(parentDOM.querySelectorAll('[role="tab"]'));
             const eqTabs = tabs.filter(t => t.textContent.includes('Comparativo por Equipos'));
             if(eqTabs.length > 0) eqTabs[0].click();
         };
     });
-
-    const tAniosGen = parentDOM.querySelectorAll('.tarjeta-clic-anios');
-    tAniosGen.forEach(el => {
+    parentDOM.querySelectorAll('.tarjeta-clic-anios').forEach(el => {
         el.onclick = function() {
             const tabs = Array.from(parentDOM.querySelectorAll('[role="tab"]'));
             const eqTabs = tabs.filter(t => t.textContent.includes('Comparativo por Equipos'));
-            if(eqTabs.length > 2) eqTabs[2].click();
+            if(eqTabs.length > 1) eqTabs[1].click(); // En la vista años, 'Equipos' es la pestaña 3 (índice 2)
         };
     });
-
-    const tAccionesProf = parentDOM.querySelectorAll('.tarjeta-clic-acciones-prof');
-    tAccionesProf.forEach(el => {
+    parentDOM.querySelectorAll('.tarjeta-clic-acciones-prof').forEach(el => {
         el.onclick = function() {
             const tabs = Array.from(parentDOM.querySelectorAll('[role="tab"]'));
             const profTabs = tabs.filter(t => t.textContent.includes('Por Profesional'));
             if(profTabs.length > 0) profTabs[0].click();
         };
     });
-
-    const tAniosProf = parentDOM.querySelectorAll('.tarjeta-clic-anios-prof');
-    tAniosProf.forEach(el => {
+    parentDOM.querySelectorAll('.tarjeta-clic-anios-prof').forEach(el => {
         el.onclick = function() {
             const tabs = Array.from(parentDOM.querySelectorAll('[role="tab"]'));
             const profTabs = tabs.filter(t => t.textContent.includes('Por Profesional'));
             if(profTabs.length > 1) profTabs[1].click();
-        };
-    });
-
-    // -----------------------------------------------------------
-    // 4. CLICS EN LA TABLA DE PROCEDIMIENTOS -> ABRIR MODAL
-    // -----------------------------------------------------------
-    const celdasProc = parentDOM.querySelectorAll('.celda-proc-clic');
-    celdasProc.forEach(el => {
-        el.onclick = function() {
-            const proc = el.getAttribute('data-proc');
-            const anio = el.getAttribute('data-anio');
-            
-            const inputs = parentDOM.querySelectorAll('input[aria-label="modal_trigger"]');
-            if(inputs.length > 0) {
-                const input = inputs[0];
-                const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
-                nativeInputValueSetter.call(input, proc + "|||" + anio + "|||" + Date.now());
-                input.dispatchEvent(new Event('input', { bubbles: true }));
-                input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
-            }
         };
     });
 
@@ -953,21 +832,13 @@ setTimeout(function() {
 """, height=0, width=0)
 
 # ==============================================================================
-# CONTENIDO DE LA PESTAÑA 2: AVANCE DE PRODUCCIÓN (ENRUTAMIENTO NATIVO Y SEGURO)
+# CONTENIDO DE LA PESTAÑA 2: AVANCE DE PRODUCCIÓN
 # ==============================================================================
 with tab_produccion:
     st.markdown("<br><br><h2 style='text-align: center; color: #2C3E50;'>Estamos trabajando para integrar esta información, por lo pronto ingrese a:</h2><br>", unsafe_allow_html=True)
-    
     col_izq, col_centro, col_der = st.columns([3, 4, 3])
-    
     with col_centro:
-        st.link_button(
-            label="📊 Ir al Tablero de Control SDDI",
-            url="https://script.google.com/macros/s/AKfycbzNuA__KQObk_2JI8iuBxqFD5RyByc7jVHe7OudtrFrEnpIPBCc6D3SEZ0-BCofUYiJ/exec",
-            type="primary",
-            use_container_width=True
-        )
-        
+        st.link_button("📊 Ir al Tablero de Control SDDI", "https://script.google.com/macros/s/AKfycbzNuA__KQObk_2JI8iuBxqFD5RyByc7jVHe7OudtrFrEnpIPBCc6D3SEZ0-BCofUYiJ/exec", type="primary", use_container_width=True)
     st.markdown("<br><br>", unsafe_allow_html=True)
 
 # ==============================================================================
