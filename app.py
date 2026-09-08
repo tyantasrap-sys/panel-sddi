@@ -803,7 +803,7 @@ with tab_produccion:
     st.markdown("<br><br><h2 style='text-align: center; color: #2C3E50;'>Estamos trabajando para integrar esta información, por lo pronto ingrese a:</h2><br>", unsafe_allow_html=True)
     col_izq, col_centro, col_der = st.columns([3, 4, 3])
     with col_centro:
-        # Token de seguridad coordinado con el script de Apps Script
+        # Mejora Inyectada: Enlace con token de seguridad. (Misma lógica probada y sugerida)
         GAS_URL = "https://script.google.com/macros/s/AKfycbzNuA__KQObk_2JI8iuBxqFD5RyByc7jVHe7OudtrFrEnpIPBCc6D3SEZ0-BCofUYiJ/exec"
         SECRET_TOKEN = "MI_CLAVE_SECRETA_123" 
         enlace_seguro = f"{GAS_URL}?token={SECRET_TOKEN}"
