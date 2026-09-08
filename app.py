@@ -69,16 +69,14 @@ def sincronizar_estados_sunarp(usuario_codigo):
         ws_origen = wb_origen.get_worksheet(0)
         datos_origen = ws_origen.get_all_values()
 
-        # 1. Preparación del Diccionario incluyendo Columna D y Columna H
         diccionario_estados = {}
         for fila in datos_origen[1:]: 
-            # Aseguramos que la fila de origen tenga al menos 8 elementos para leer la Columna H (índice 7)
             fila_segura_origen = fila + [""] * (8 - len(fila))
-            titulo = fila_segura_origen[2].strip() # Columna C
+            titulo = fila_segura_origen[2].strip() 
             
             if titulo:
-                estado = fila_segura_origen[3].strip() # Columna D
-                dato_h = fila_segura_origen[7].strip() # Columna H
+                estado = fila_segura_origen[3].strip() 
+                dato_h = fila_segura_origen[7].strip() 
                 diccionario_estados[titulo] = {"estado": estado, "dato_h": dato_h}
 
         ID_DESTINO = "1U_M04niREqrrb88xODw6BflbIH4HTODzXZKjkwzAWfg"
@@ -99,39 +97,32 @@ def sincronizar_estados_sunarp(usuario_codigo):
                 ws_destino = wb_destino.worksheet(nombre_pestaña)
                 datos_destino = ws_destino.get_all_values()
                 
-                # 2. Matriz que almacenará las columnas M y N juntas
                 columnas_mn_actualizada = []
                 hubo_modificacion_en_pestaña = False
 
                 for idx, fila in enumerate(datos_destino):
-                    # Cabecera
                     if idx == 0: 
                         val_m = fila[12] if len(fila) > 12 else "REVISADO"
                         val_n = fila[13] if len(fila) > 13 else "DATO ADICIONAL"
                         columnas_mn_actualizada.append([val_m, val_n])
                         continue
                     
-                    # Aseguramos que la fila de destino tenga al menos 14 elementos para acceder hasta la N (índice 13)
                     fila_segura = fila + [""] * (14 - len(fila))
-                    n_titulo = fila_segura[9].strip() # Columna J
-                    estado_actual = fila_segura[12].strip() # Columna M
-                    dato_n_actual = fila_segura[13].strip() # Columna N
+                    n_titulo = fila_segura[9].strip() 
+                    estado_actual = fila_segura[12].strip() 
+                    dato_n_actual = fila_segura[13].strip() 
 
-                    # 3. Match y Actualización
                     if n_titulo in diccionario_estados:
                         nuevo_estado = diccionario_estados[n_titulo]["estado"]
                         nuevo_dato_h = diccionario_estados[n_titulo]["dato_h"]
                         
-                        # Si hay un cambio ya sea en el estado o en el dato extra, lo actualizamos
                         if estado_actual != nuevo_estado or dato_n_actual != nuevo_dato_h:
                             estado_actual = nuevo_estado
                             dato_n_actual = nuevo_dato_h
                             hubo_modificacion_en_pestaña = True
                             
-                    # Guardamos el par para la escritura en bloque (Columna M y Columna N)
                     columnas_mn_actualizada.append([estado_actual, dato_n_actual])
 
-                # 4. Escritura en Bloque sin borrar el resto del libro
                 if hubo_modificacion_en_pestaña:
                     rango_escritura = f"M1:N{len(columnas_mn_actualizada)}"
                     ws_destino.update(values=columnas_mn_actualizada, range_name=rango_escritura)
@@ -150,7 +141,6 @@ def sincronizar_estados_sunarp(usuario_codigo):
 def mostrar_modal_detalle(tipo_clic, param1, param2, param3, df_base):
     df_modal = df_base.copy()
     
-    # ENRUTAMIENTO Y FILTRADO ESTRICTO
     if tipo_clic == "PROC":
         st.markdown(f"<h5 style='color:#2980B9; margin-top:0;'>Procedimiento: {param1} | Año: {param2}</h5>", unsafe_allow_html=True)
         if param1 != 'TOTAL': df_modal = df_modal[df_modal.iloc[:, 10].astype(str).str.strip().str.upper() == param1.upper()]
@@ -210,7 +200,6 @@ def mostrar_modal_detalle(tipo_clic, param1, param2, param3, df_base):
         df_final["Fecha_Ultima_Accion"] = df_modal.iloc[:, 3]
         df_final["Trazabilidad_Oculta"] = df_modal["Trazabilidad"] if "Trazabilidad" in df_modal.columns else df_modal.iloc[:, 5]
         
-        # ANONIMIZACIÓN SEGURA Y EXPANDIDA (Compraventa, Permuta, Desafectación, Subasta)
         terminos_privacidad = "COMPRAVENTA|PERMUTA|DESAFECTACI[OÓ]N|SUBASTA"
         mask_privacidad = df_final["Procedimiento"].astype(str).str.upper().str.contains(terminos_privacidad, regex=True)
         
@@ -260,7 +249,7 @@ def mostrar_modal_detalle(tipo_clic, param1, param2, param3, df_base):
         st.error("No hay suficientes columnas en la base de datos para mostrar el detalle.")
 
 # ==============================================================================
-# ESTILOS CSS AVANZADOS Y UI (CORRECCIÓN DE TEMBLOR Y SIMETRÍA)
+# ESTILOS CSS AVANZADOS Y UI
 # ==============================================================================
 st.markdown("""
 <style>
@@ -292,7 +281,6 @@ h1 a svg, h2 a svg, h3 a svg { display: none !important; }
 .tarjeta-clic { cursor: pointer; transition: all 0.2s ease; }
 .tarjeta-clic:hover { transform: translateY(-3px); box-shadow: 0 6px 12px rgba(0,0,0,0.15) !important; z-index: 10; background-color: #FDFEFE !important; }
 
-/* REGLAS ESTRICTAS CONTRA EL SHAKING Y ACTIVACIÓN DE CURSOR POINTER (MANITO) */
 .celda-proc-clic, .mod-proc, .mod-proc-eq, .celda-equipo-clic, .mod-anio-gen, .mod-anio-eq, .mod-accion, .mod-accion-prof, .mod-anio-gen-eq, .mod-anio-prof { 
     cursor: pointer !important; 
     transition: background-color 0.2s ease, color 0.2s ease; 
@@ -304,7 +292,6 @@ h1 a svg, h2 a svg, h3 a svg { display: none !important; }
 
 .tarjeta-equipo { background-color: #FFFFFF; padding: 12px 10px; border-radius: 10px; border-top: 4px solid #2980B9; box-shadow: 0 3px 8px rgba(0,0,0,0.04); text-align: center; margin-bottom: 10px; height: 120px !important; display: flex; flex-direction: column; justify-content: center; }
 
-/* TABLAS SIMÉTRICAS */
 .tabla-matricial { width: 100%; min-width: 750px; border-collapse: collapse; font-family: 'Inter', sans-serif; table-layout: fixed; }
 .tabla-matricial th { background-color: #2980B9; color: #FFFFFF; text-align: center; padding: 6px 8px; font-size: 11px; font-weight: 700; border: 1px solid #1A5276; text-transform: uppercase; line-height: 1.2; word-wrap: break-word; }
 .tabla-matricial th.header-secundario { background-color: #F8F9F9; color: #7F8C8D; border-bottom: 2px solid #BDC3C7; border-color: #E0E6ED; font-size: 12px; }
@@ -816,7 +803,12 @@ with tab_produccion:
     st.markdown("<br><br><h2 style='text-align: center; color: #2C3E50;'>Estamos trabajando para integrar esta información, por lo pronto ingrese a:</h2><br>", unsafe_allow_html=True)
     col_izq, col_centro, col_der = st.columns([3, 4, 3])
     with col_centro:
-        st.link_button("📊 Ir al Tablero de Control SDDI", "https://script.google.com/macros/s/AKfycbzNuA__KQObk_2JI8iuBxqFD5RyByc7jVHe7OudtrFrEnpIPBCc6D3SEZ0-BCofUYiJ/exec", type="primary", use_container_width=True)
+        # Token de seguridad coordinado con el script de Apps Script
+        GAS_URL = "https://script.google.com/macros/s/AKfycbzNuA__KQObk_2JI8iuBxqFD5RyByc7jVHe7OudtrFrEnpIPBCc6D3SEZ0-BCofUYiJ/exec"
+        SECRET_TOKEN = "MI_CLAVE_SECRETA_123" 
+        enlace_seguro = f"{GAS_URL}?token={SECRET_TOKEN}"
+        
+        st.link_button("📊 Ir al Tablero de Control SDDI", enlace_seguro, type="primary", use_container_width=True)
     st.markdown("<br><br>", unsafe_allow_html=True)
 
 st.markdown("<div style='text-align: center; margin-top: 50px; padding-top: 20px; border-top: 1px solid #E0E6ED; color: #95A5A6; font-size: 13px;'><b>Diseñado y Desarrollado: Equipo de Gestión SDDI / tyantas-myps</b> &nbsp;|&nbsp; <span style='color: #95A5A6;'>(Información de Trámite Transparente)</span></div>", unsafe_allow_html=True)
