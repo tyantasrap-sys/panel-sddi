@@ -69,10 +69,17 @@ def sincronizar_estados_sunarp(usuario_codigo):
         ws_origen = wb_origen.get_worksheet(0)
         datos_origen = ws_origen.get_all_values()
 
+        # 1. Preparación del Diccionario incluyendo Columna D y Columna H
         diccionario_estados = {}
         for fila in datos_origen[1:]: 
-            if len(fila) > 3 and fila[2].strip():
-                diccionario_estados[fila[2].strip()] = fila[3].strip()
+            # Aseguramos que la fila de origen tenga al menos 8 elementos para leer la Columna H (índice 7)
+            fila_segura_origen = fila + [""] * (8 - len(fila))
+            titulo = fila_segura_origen[2].strip() # Columna C
+            
+            if titulo:
+                estado = fila_segura_origen[3].strip() # Columna D
+                dato_h = fila_segura_origen[7].strip() # Columna H
+                diccionario_estados[titulo] = {"estado": estado, "dato_h": dato_h}
 
         ID_DESTINO = "1U_M04niREqrrb88xODw6BflbIH4HTODzXZKjkwzAWfg"
         wb_destino = client.open_by_key(ID_DESTINO)
@@ -92,29 +99,42 @@ def sincronizar_estados_sunarp(usuario_codigo):
                 ws_destino = wb_destino.worksheet(nombre_pestaña)
                 datos_destino = ws_destino.get_all_values()
                 
-                columna_m_actualizada = []
+                # 2. Matriz que almacenará las columnas M y N juntas
+                columnas_mn_actualizada = []
                 hubo_modificacion_en_pestaña = False
 
                 for idx, fila in enumerate(datos_destino):
+                    # Cabecera
                     if idx == 0: 
-                        columna_m_actualizada.append(["REVISADO" if len(fila) <= 12 else fila[12]])
+                        val_m = fila[12] if len(fila) > 12 else "REVISADO"
+                        val_n = fila[13] if len(fila) > 13 else "DATO ADICIONAL"
+                        columnas_mn_actualizada.append([val_m, val_n])
                         continue
                     
-                    fila_segura = fila + [""] * (13 - len(fila))
-                    n_titulo = fila_segura[9].strip()
-                    estado_actual = fila_segura[12].strip()
+                    # Aseguramos que la fila de destino tenga al menos 14 elementos para acceder hasta la N (índice 13)
+                    fila_segura = fila + [""] * (14 - len(fila))
+                    n_titulo = fila_segura[9].strip() # Columna J
+                    estado_actual = fila_segura[12].strip() # Columna M
+                    dato_n_actual = fila_segura[13].strip() # Columna N
 
+                    # 3. Match y Actualización
                     if n_titulo in diccionario_estados:
-                        nuevo_estado = diccionario_estados[n_titulo]
-                        if estado_actual != nuevo_estado:
+                        nuevo_estado = diccionario_estados[n_titulo]["estado"]
+                        nuevo_dato_h = diccionario_estados[n_titulo]["dato_h"]
+                        
+                        # Si hay un cambio ya sea en el estado o en el dato extra, lo actualizamos
+                        if estado_actual != nuevo_estado or dato_n_actual != nuevo_dato_h:
                             estado_actual = nuevo_estado
+                            dato_n_actual = nuevo_dato_h
                             hubo_modificacion_en_pestaña = True
                             
-                    columna_m_actualizada.append([estado_actual])
+                    # Guardamos el par para la escritura en bloque (Columna M y Columna N)
+                    columnas_mn_actualizada.append([estado_actual, dato_n_actual])
 
+                # 4. Escritura en Bloque sin borrar el resto del libro
                 if hubo_modificacion_en_pestaña:
-                    rango_escritura = f"M1:M{len(columna_m_actualizada)}"
-                    ws_destino.update(values=columna_m_actualizada, range_name=rango_escritura)
+                    rango_escritura = f"M1:N{len(columnas_mn_actualizada)}"
+                    ws_destino.update(values=columnas_mn_actualizada, range_name=rango_escritura)
 
             except gspread.exceptions.WorksheetNotFound:
                 continue
@@ -196,7 +216,6 @@ def mostrar_modal_detalle(tipo_clic, param1, param2, param3, df_base):
         
         palabras_entidad = "MUNICIPALIDAD|GOBIERNO|MINISTERIO|S\.A\.|S\.A\.C\.|S\.R\.L\.|E\.I\.R\.L\.|ASOCIACION|EMPRESA|COMUNIDAD|CONSORCIO|DIRECCION|SUPERINTENDENCIA|UNIVERSIDAD|COOPERATIVA|SINDICATO|PROYECTO|IGLESIA|COMITE|JUNTA"
         mask_juridica = df_final["Administrado"].astype(str).str.upper().str.contains(palabras_entidad, na=False)
-        
         mask_ocultar = mask_privacidad & ~mask_juridica
         df_final.loc[mask_ocultar, "Administrado"] = "PERSONA NATURAL"
         
