@@ -10,6 +10,7 @@ from google.oauth2.service_account import Credentials
 import unicodedata
 from html import escape
 from typing import Dict, List, Optional, Tuple
+from urllib.parse import quote
 import requests
 try:
     from rapidfuzz import fuzz, process
@@ -255,7 +256,61 @@ def mostrar_modal_detalle(tipo_clic, param1, param2, param3, df_base):
             st.download_button("📥 Bajar Excel", data=buffer.getvalue(), file_name=f"Reporte_Expedientes_{tipo_clic}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
             
         st.markdown("<div style='margin-bottom: 5px;'></div>", unsafe_allow_html=True)
-        st.dataframe(df_mostrar, use_container_width=True, hide_index=True, column_config={"URL_Tramite": st.column_config.LinkColumn("🔗 Acción", display_text="Abrir Trámite")})
+
+        # Tabla de detalle clicable: toda la fila abre Trámite Transparente.
+        # No modificamos los datos ni los filtros del modal; solo la forma de interacción.
+        columnas_tabla = [c for c in df_mostrar.columns if c != "URL_Tramite"]
+        filas_html = []
+        for _, row in df_mostrar.iterrows():
+            expediente = str(row.get("Expediente", "")).strip()
+            safe_url_detalle = escape(
+                "https://tramitetransparente.sbn.gob.pe/#auto=" + quote(expediente, safe=""),
+                quote=True,
+            )
+            celdas = []
+            for col in columnas_tabla:
+                valor = row.get(col, "")
+                if pd.isna(valor):
+                    valor = ""
+                if isinstance(valor, pd.Timestamp):
+                    valor = valor.strftime("%Y-%m-%d")
+                celdas.append(f"<td>{escape(str(valor))}</td>")
+            filas_html.append(
+                f"<tr class='detalle-exp-row' data-url='{safe_url_detalle}' "
+                f"onclick=\"window.open(this.dataset.url,'_blank')\" title='Abrir expediente en Trámite Transparente'>"
+                + "".join(celdas)
+                + "</tr>"
+            )
+
+        encabezados = "".join(f"<th>{escape(str(c))}</th>" for c in columnas_tabla)
+        detalle_html = f"""
+        <style>
+          * {{ box-sizing: border-box; }}
+          body {{ margin:0; font-family: Inter, Arial, sans-serif; background: transparent; }}
+          .detalle-wrap {{ width:100%; overflow-x:auto; max-height:62vh; background:#fff; border:1px solid #d9dde1; border-radius:6px; }}
+          .detalle-table {{ width:max-content; min-width:100%; border-collapse:collapse; font-size:12px; background:#fff; }}
+          .detalle-table th {{ position:sticky; top:0; z-index:2; background:#f1f3f5; color:#505a5f; padding:8px 9px; border:1px solid #d9dde1; text-align:left; white-space:nowrap; font-weight:700; }}
+          .detalle-table td {{ padding:8px 9px; border:1px solid #e1e4e7; color:#202428; vertical-align:top; white-space:nowrap; }}
+          .detalle-exp-row {{ cursor:pointer; }}
+          .detalle-exp-row:hover td {{ background:#e8f3fb; }}
+          .detalle-exp-row:active td {{ background:#d9ebf7; }}
+          @media(max-width:768px) {{
+            .detalle-table {{ font-size:11px; }}
+            .detalle-table td, .detalle-table th {{ padding:7px 8px; }}
+          }}
+        </style>
+        <div class='detalle-wrap'>
+          <table class='detalle-table'>
+            <thead><tr>{encabezados}</tr></thead>
+            <tbody>{''.join(filas_html)}</tbody>
+          </table>
+        </div>
+        """
+        components.html(
+            detalle_html,
+            height=min(620, max(220, 74 + min(len(df_mostrar), 14) * 34)),
+            scrolling=False,
+        )
     else:
         st.error("No hay suficientes columnas en la base de datos para mostrar el detalle.")
 
