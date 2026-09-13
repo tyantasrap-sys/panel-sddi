@@ -7,6 +7,17 @@ import gspread
 import streamlit.components.v1 as components
 from google.oauth2.service_account import Credentials
 
+import unicodedata
+from html import escape
+from typing import Dict, List, Optional, Tuple
+import requests
+try:
+    from rapidfuzz import fuzz, process
+    RAPIDFUZZ_AVAILABLE = True
+except Exception:
+    from difflib import SequenceMatcher, get_close_matches
+    RAPIDFUZZ_AVAILABLE = False
+
 # ==============================================================================
 # CONFIGURACIÓN DEFENSIVA Y LOGGING
 # ==============================================================================
@@ -425,10 +436,1017 @@ def generar_tarjeta_html(etiqueta, config):
     </div>
     """
 
+
+# ==============================================================================
+# MOTOR DE BÚSQUEDA UNIVERSO EXP. (integrado como tercer módulo)
+# ==============================================================================
+PUBLISHED_SHEET_URL = (
+    "https://docs.google.com/spreadsheets/d/e/"
+    "2PACX-1vT1sNYxj6znXHjwEGFZH58FXR1CUGUuw6Ro7dz2Y65byi6nkGP9s5f88FbUze-QT550MeucdeSpOIWm/"
+    "pub?output=xlsx"
+)
+SHEET_NAME = "UNIVERSO EXP."
+
+def normalize_text(value) -> str:
+    if pd.isna(value):
+        return ""
+    text = str(value).strip().upper()
+    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+    text = re.sub(r"[^A-Z0-9]+", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def singularize_token(token: str) -> str:
+    """Reduce plurales frecuentes a una forma de búsqueda más estable."""
+    t = normalize_text(token)
+    if len(t) <= 4:
+        return t
+    # Casos frecuentes en español; evitamos tocar términos muy cortos.
+    irregular = {
+        "MUNICIPALIDADES": "MUNICIPALIDAD",
+        "MUNICIPIOS": "MUNICIPIO",
+        "TRANSFERENCIAS": "TRANSFERENCIA",
+        "COMPRAVENTAS": "COMPRAVENTA",
+        "RESOLUCIONES": "RESOLUCION",
+        "EMPRESAS": "EMPRESA",
+        "ENTIDADES": "ENTIDAD",
+        "GOBIERNOS": "GOBIERNO",
+        "EXPEDIENTES": "EXPEDIENTE",
+        "TRAMITES": "TRAMITE",
+    }
+    if t in irregular:
+        return irregular[t]
+    if t.endswith("ES") and len(t) > 5:
+        return t[:-2]
+    if t.endswith("S") and len(t) > 4:
+        return t[:-1]
+    return t
+
+
+def normalize_search_phrase(text: str) -> str:
+    parts = [singularize_token(x) for x in normalize_text(text).split()]
+    return " ".join(parts)
+
+
+def first_existing_column(df: pd.DataFrame, candidates: List[str]) -> Optional[str]:
+    normalized = {normalize_text(c): c for c in df.columns}
+    for candidate in candidates:
+        hit = normalized.get(normalize_text(candidate))
+        if hit:
+            return hit
+    return None
+
+
+def infer_columns(df: pd.DataFrame) -> Dict[str, Optional[str]]:
+    return {
+        "expediente": df.columns[0] if len(df.columns) >= 1 else None,  # A
+        "entidad": df.columns[3] if len(df.columns) >= 4 else None,      # D
+        "procedimiento": df.columns[11] if len(df.columns) >= 12 else None,  # L
+        "departamento": first_existing_column(df, ["DEPARTAMENTO", "REGION", "REGIÓN"]),
+        "provincia": first_existing_column(df, ["PROVINCIA"]),
+        "distrito": first_existing_column(df, ["DISTRITO"]),
+        "anio": first_existing_column(
+            df,
+            [
+                "AÑO", "ANIO", "AÑO CREACION", "AÑO DE CREACION", "AÑO DE GENERACION",
+                "AÑO EXPEDIENTE", "ANIO EXPEDIENTE", "FECHA", "FECHA DE INGRESO"
+            ],
+        ),
+        "estado": first_existing_column(
+            df,
+            ["ESTADO", "SITUACION", "SITUACIÓN", "ESTADO DEL EXPEDIENTE", "SITUACION DEL EXPEDIENTE"],
+        ),
+        "marco_normativo": df.columns[29] if len(df.columns) >= 30 else None,  # AD
+    }
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def cargar_universo_online() -> pd.DataFrame:
+    response = requests.get(PUBLISHED_SHEET_URL, timeout=45)
+    response.raise_for_status()
+    if "text/html" in response.headers.get("content-type", "").lower():
+        raise RuntimeError("Google devolvió HTML en lugar del libro XLSX publicado.")
+    return pd.read_excel(io.BytesIO(response.content), sheet_name=SHEET_NAME)
+
+
+# ============================================================================== 
+# ÍNDICES DE BÚSQUEDA
+# ============================================================================== 
+
+
+def unique_clean_values(df: pd.DataFrame, col: Optional[str]) -> List[str]:
+    if not col or col not in df.columns:
+        return []
+    vals = df[col].dropna().astype(str).str.strip()
+    vals = [v for v in vals.unique().tolist() if v]
+    return vals
+
+
+def build_index(df: pd.DataFrame, col: Optional[str]) -> pd.DataFrame:
+    vals = unique_clean_values(df, col)
+    return pd.DataFrame({
+        "original": vals,
+        "norm": [normalize_text(v) for v in vals],
+    })
+
+
+def fuzzy_candidates(index_df: pd.DataFrame, query: str, min_score: float = 68, limit: int = 30) -> Tuple[List[str], float]:
+    q = normalize_search_phrase(query)
+    if not q or index_df.empty:
+        return [], 0.0
+
+    choices = index_df["norm"].tolist()
+    results: List[Tuple[str, float]] = []
+
+    if RAPIDFUZZ_AVAILABLE:
+        matches = process.extract(q, choices, scorer=fuzz.WRatio, limit=limit)
+        for matched, score, idx in matches:
+            if float(score) >= min_score:
+                results.append((index_df.iloc[idx]["original"], float(score)))
+    else:
+        for idx, val in enumerate(choices):
+            score = SequenceMatcher(None, q, val).ratio() * 100
+            if score >= min_score:
+                results.append((index_df.iloc[idx]["original"], score))
+        results.sort(key=lambda x: x[1], reverse=True)
+        results = results[:limit]
+
+    # Si el texto de consulta está contenido en el valor, reforzamos la coincidencia.
+    for idx, row in index_df.iterrows():
+        if q and q in row["norm"]:
+            item = row["original"]
+            if item not in {x[0] for x in results}:
+                results.append((item, 94.0))
+
+    results.sort(key=lambda x: (-x[1], len(x[0])))
+    return [x[0] for x in results[:limit]], (results[0][1] if results else 0.0)
+
+
+def mask_contains(serie: pd.Series, text: str) -> pd.Series:
+    q = normalize_text(text)
+    if not q:
+        return pd.Series(True, index=serie.index)
+    return serie.astype(str).map(normalize_text).str.contains(q, regex=False, na=False)
+
+
+def exact_or_fuzzy_field_mask(df: pd.DataFrame, col: Optional[str], query: str, min_score: float = 70) -> Tuple[pd.Series, float]:
+    empty = pd.Series(False, index=df.index)
+    if not col or col not in df.columns:
+        return empty, 0.0
+
+    q = normalize_search_phrase(query)
+    if not q:
+        return empty, 0.0
+
+    serie = df[col].astype(str)
+    norm = serie.map(normalize_text)
+
+    # Coincidencia por frase.
+    exact = norm.str.contains(q, regex=False, na=False)
+    if exact.any():
+        return exact, 100.0
+
+    # Todas las palabras significativas en el mismo campo.
+    tokens = [singularize_token(t) for t in q.split() if len(t) >= 2]
+    if tokens:
+        token_mask = pd.Series(True, index=df.index)
+        for token in tokens:
+            token_mask &= norm.str.contains(token, regex=False, na=False)
+        if token_mask.any():
+            return token_mask, 96.0
+
+    # Variaciones históricas por valores únicos del campo.
+    index_df = build_index(df, col)
+    candidates, score = fuzzy_candidates(index_df, q, min_score=min_score, limit=40)
+    if candidates:
+        valid_norm = {normalize_text(v) for v in candidates}
+        return norm.isin(valid_norm), score
+
+    return empty, score
+
+
+def procedure_family_mask(df: pd.DataFrame, col: Optional[str], query: str) -> Tuple[pd.Series, float]:
+    """Busca una familia de procedimientos con normalización robusta.
+
+    Para una consulta de una sola palabra, por ejemplo "constitucion",
+    devuelve TODAS las denominaciones del campo L que contengan esa palabra
+    como término independiente. La comparación ignora tildes, mayúsculas,
+    espacios y caracteres Unicode invisibles.
+    """
+    empty = pd.Series(False, index=df.index)
+    if not col or col not in df.columns:
+        return empty, 0.0
+
+    q = normalize_search_phrase(query)
+    tokens = [t for t in q.split() if len(t) >= 2]
+    if not tokens:
+        return empty, 0.0
+
+    norm = df[col].astype(str).map(normalize_text)
+
+    # Búsqueda por término completo. El límite está dado por cualquier
+    # carácter no alfanumérico, evitando AFECTACION -> DESAFECTACION.
+    mask = pd.Series(True, index=df.index)
+    for token in tokens:
+        token_re = rf"(?<![A-Z0-9]){re.escape(token)}(?![A-Z0-9])"
+        mask &= norm.str.contains(token_re, regex=True, na=False)
+
+    if mask.any():
+        return mask, 100.0 if len(tokens) == 1 else 98.0
+
+    # Fallback robusto para casos donde Google Sheets haya introducido
+    # caracteres Unicode/espacios atípicos dentro de la denominación.
+    compact_norm = norm.str.replace(r"[^A-Z0-9]+", "", regex=True)
+    compact_query = re.sub(r"[^A-Z0-9]+", "", q)
+    if compact_query and len(compact_query) >= 3:
+        compact_mask = compact_norm.str.contains(
+            re.escape(compact_query), regex=False, na=False
+        )
+        if compact_mask.any():
+            return compact_mask, 96.0
+
+    return empty, 0.0
+
+
+def procedure_field_mask(df: pd.DataFrame, col: Optional[str], query: str) -> Tuple[pd.Series, float]:
+    """Busca procedimientos por términos/frases completos, evitando falsos positivos.
+
+    Ej.: AFECTACION EN USO no coincide con DESAFECTACION solo porque
+    comparte una parte de la palabra. Una consulta como COMPRAVENTA
+    sí puede abarcar COMPRAVENTA DIRECTA y REGULARIZACION ... DE COMPRAVENTA,
+    porque COMPRAVENTA aparece como término completo del procedimiento.
+    """
+    empty = pd.Series(False, index=df.index)
+    if not col or col not in df.columns:
+        return empty, 0.0
+    q = normalize_search_phrase(query)
+    if not q:
+        return empty, 0.0
+
+    norm = df[col].astype(str).map(normalize_text)
+
+    # Para una sola palabra, la búsqueda es por familia de procedimiento: todos
+    # los nombres de la columna L que contengan esa palabra completa.
+    if len(q.split()) == 1:
+        family_mask, family_score = procedure_family_mask(df, col, q)
+        if family_mask.any():
+            return family_mask, family_score
+
+    phrase_re = rf"(?:^| ){re.escape(q)}(?: |$)"
+    exact = norm.str.contains(phrase_re, regex=True, na=False)
+    if exact.any():
+        return exact, 100.0
+
+    # Para frases de varios términos, todos deben existir como palabras completas.
+    tokens = [t for t in q.split() if len(t) >= 2]
+    if len(tokens) >= 2:
+        token_mask = pd.Series(True, index=df.index)
+        for token in tokens:
+            token_re = rf"(?:^| ){re.escape(token)}(?: |$)"
+            token_mask &= norm.str.contains(token_re, regex=True, na=False)
+        if token_mask.any():
+            return token_mask, 96.0
+
+    # Último recurso: tolerancia alta para errores ortográficos. No usamos WRatio
+    # porque puede considerar demasiado parecidas palabras como AFECTACION/DESAFECTACION.
+    index_df = build_index(df, col)
+    choices = index_df["norm"].tolist() if not index_df.empty else []
+    if RAPIDFUZZ_AVAILABLE and choices:
+        matches = process.extract(q, choices, scorer=fuzz.ratio, limit=10)
+        strong = [(index_df.iloc[idx]["original"], float(score)) for _, score, idx in matches if float(score) >= 92]
+        if strong:
+            valid = {normalize_text(v) for v, _ in strong}
+            best = max(score for _, score in strong)
+            return norm.isin(valid), best
+    elif choices:
+        scores = []
+        for idx, val in enumerate(choices):
+            score = SequenceMatcher(None, q, val).ratio() * 100
+            if score >= 92:
+                scores.append((index_df.iloc[idx]["original"], score))
+        if scores:
+            valid = {normalize_text(v) for v, _ in scores}
+            return norm.isin(valid), max(score for _, score in scores)
+
+    return empty, 0.0
+
+
+# ============================================================================== 
+# PARSEO DE LA CONSULTA
+# ============================================================================== 
+
+STATUS_ATENDIDO = ["ARCHIVADO", "RESOLUCION EMITIDA", "RESOLUCION CONSENTIDA"]
+STATUS_TRAMITE = ["GENERADO", "CON FICHA TECNICA", "TRAMITE"]
+
+STOPWORDS = {
+    "EN", "DE", "DEL", "LA", "EL", "LOS", "LAS", "POR", "PARA", "CON",
+    "Y", "A", "ENTRE", "DESDE", "HASTA", "AL", "LOS", "ANOS", "ANO",
+}
+
+# Señales lingüísticas que suelen indicar que el usuario está buscando una entidad
+# y no un procedimiento que casualmente contiene alguna de esas palabras.
+ENTITY_CUES = {
+    "EMPRESA", "SOCIEDAD", "MUNICIPALIDAD", "MUNICIPIO", "GOBIERNO", "MINISTERIO",
+    "UNIVERSIDAD", "INVERSIONES", "CORPORACION", "CORPORACIÓN", "ASOCIACION", "ASOCIACIÓN",
+    "COMUNIDAD", "CONSORCIO", "COOPERATIVA", "BANCO", "CAJA", "FUNDACION", "FUNDACIÓN",
+    "INMOBILIARIA", "ORGANISMO", "INSTITUTO", "SUPERINTENDENCIA", "DIRECCION", "DIRECCIÓN",
+}
+
+
+class ParsedQuery:
+    def __init__(self):
+        self.raw = ""
+        self.cleaned = ""
+        self.entity_text = ""
+        self.procedure_text = ""
+        self.location_text = ""
+        self.status_group = ""
+        self.normative_key = ""
+        self.year_min: Optional[int] = None
+        self.year_max: Optional[int] = None
+        self.year_explicit = False
+        self.interpretation: List[Tuple[str, str]] = []
+        self.mode = "general"
+        self.direct_expediente = False
+        self.ambiguous = False
+        self.ambiguity_entity_text = ""
+        self.ambiguity_procedure_text = ""
+
+
+NORM_KNOWN_PATTERNS = [
+    (re.compile(r"\b(?:DL|D L|DECRETO\s+LEGISLATIVO)\s*1192\b"), "DL 1192"),
+    (re.compile(r"\b(?:LEY|L)\s*30556\b"), "LEY 30556"),
+    (re.compile(r"\b(?:LEY|L)\s*29151\b"), "LEY 29151"),
+]
+
+
+def extract_normative(text: str) -> Tuple[str, str]:
+    """Detecta marcos normativos y devuelve (texto_limpio, etiqueta)."""
+    work = normalize_search_phrase(text)
+    found = ""
+
+    for pattern, label in NORM_KNOWN_PATTERNS:
+        if pattern.search(work):
+            found = label
+            work = pattern.sub(" ", work)
+            break
+
+    if not found:
+        # Forma genérica: LEY 12345 / DL 1234 / DECRETO LEGISLATIVO 1234.
+        generic = re.search(
+            r"\b(?:LEY|L|DL|DECRETO\s+LEGISLATIVO)\s*([0-9]{3,5})\b",
+            work,
+        )
+        if generic:
+            num = generic.group(1)
+            prefix = generic.group(0).split()[0]
+            found = f"LEY {num}" if prefix in {"LEY", "L"} else f"DL {num}"
+            work = re.sub(re.escape(generic.group(0)), " ", work, count=1)
+
+    # Los números desnudos 1192/30556/29151 son útiles en consultas naturales
+    # como "transferencia 1192 en Lima". Nunca confundimos un año con esto.
+    if not found:
+        if re.search(r"\b1192\b", work):
+            found = "DL 1192"
+            work = re.sub(r"\b1192\b", " ", work, count=1)
+        elif re.search(r"\b30556\b", work):
+            found = "LEY 30556"
+            work = re.sub(r"\b30556\b", " ", work, count=1)
+        elif re.search(r"\b29151\b", work):
+            found = "LEY 29151"
+            work = re.sub(r"\b29151\b", " ", work, count=1)
+
+    return re.sub(r"\s+", " ", work).strip(), found
+
+
+YEAR_PATTERNS = [
+    re.compile(r"\b(?:DEL|DESDE)\s+(19\d{2}|20\d{2})\s+(?:AL|HASTA)\s+(19\d{2}|20\d{2})\b"),
+    re.compile(r"\bENTRE\s+(19\d{2}|20\d{2})\s+Y\s+(19\d{2}|20\d{2})\b"),
+    re.compile(r"\b(19\d{2}|20\d{2})\s*(?:A|AL|-)\s*(19\d{2}|20\d{2})\b"),
+]
+
+
+def extract_years(text: str) -> Tuple[str, Optional[int], Optional[int], bool]:
+    work = normalize_text(text)
+    for pat in YEAR_PATTERNS:
+        m = pat.search(work)
+        if m:
+            a, b = int(m.group(1)), int(m.group(2))
+            if a > b:
+                a, b = b, a
+            cleaned = (work[:m.start()] + " " + work[m.end():]).strip()
+            return re.sub(r"\s+", " ", cleaned), a, b, True
+
+    years = [int(x) for x in re.findall(r"\b(?:19|20)\d{2}\b", work)]
+    if len(years) >= 2:
+        a, b = min(years), max(years)
+        cleaned = re.sub(r"\b(?:19|20)\d{2}\b", " ", work)
+        return re.sub(r"\s+", " ", cleaned).strip(), a, b, True
+    if len(years) == 1:
+        cleaned = re.sub(r"\b(?:19|20)\d{2}\b", " ", work)
+        return re.sub(r"\s+", " ", cleaned).strip(), years[0], years[0], True
+
+    return work, None, None, False
+
+
+def extract_status(text: str) -> Tuple[str, str]:
+    work = normalize_text(text)
+    if re.search(r"\bATENDID(?:O|A|OS|AS)\b", work):
+        return re.sub(r"\bATENDID(?:O|A|OS|AS)\b", " ", work).strip(), "ATENDIDOS"
+    if re.search(r"\bEN\s+TRAMITE\b|\bTRAMITES?\b", work):
+        cleaned = re.sub(r"\bEN\s+TRAMITE\b|\bTRAMITES?\b", " ", work).strip()
+        return cleaned, "EN TRAMITE"
+    return work, ""
+
+
+def find_geo_phrase(query: str, geo_values: List[str]) -> Tuple[str, str]:
+    """Devuelve (texto_geografico, query_sin_geografia), priorizando coincidencias largas."""
+    q = normalize_text(query)
+    if not q or not geo_values:
+        return "", q
+
+    # Nombres de 2+ palabras primero.
+    normalized_geo = sorted(
+        [(normalize_text(v), v) for v in geo_values if normalize_text(v)],
+        key=lambda x: (-len(x[0]), x[0]),
+    )
+    for norm_geo, original in normalized_geo:
+        if len(norm_geo) < 3:
+            continue
+        if re.search(rf"\b{re.escape(norm_geo)}\b", q):
+            cleaned = re.sub(rf"\b{re.escape(norm_geo)}\b", " ", q, count=1)
+            return original, re.sub(r"\s+", " ", cleaned).strip()
+
+    # Frase posterior a EN.
+    m = re.search(r"\bEN\s+(.+)$", q)
+    if m:
+        right = m.group(1).strip()
+        # Exacto o fuzzy contra un nombre geográfico completo.
+        exact = [orig for norm, orig in normalized_geo if norm == right]
+        if exact:
+            cleaned = q[:m.start()].strip()
+            return exact[0], cleaned
+        candidates, _ = fuzzy_candidates(
+            pd.DataFrame({"original": [x[1] for x in normalized_geo], "norm": [x[0] for x in normalized_geo]}),
+            right,
+            min_score=86,
+            limit=5,
+        )
+        if candidates:
+            cleaned = q[:m.start()].strip()
+            return candidates[0], cleaned
+
+    return "", q
+
+
+
+def direct_single_term_procedure_family(
+    df: pd.DataFrame,
+    procedimiento_col: Optional[str],
+    text: str,
+) -> str:
+    """Devuelve el término si existe como palabra completa en la columna L.
+
+    Esta ruta es deliberadamente directa para consultas de una sola palabra:
+    por ejemplo CONSTITUCION debe recuperar la familia completa de procedimientos
+    que contenga CONSTITUCION, sin pasar por la puntuación entidad/procedimiento.
+    """
+    if not procedimiento_col or procedimiento_col not in df.columns:
+        return ""
+
+    q = normalize_search_phrase(text)
+    if len(q.split()) != 1 or len(q) < 3:
+        return ""
+
+    # Primero, coincidencia por palabra completa en la columna L.
+    values = df[procedimiento_col].fillna("").astype(str)
+    normalized = values.map(normalize_text)
+    token_re = rf"(?<![A-Z0-9]){re.escape(q)}(?![A-Z0-9])"
+
+    if normalized.str.contains(token_re, regex=True, na=False).any():
+        return q
+
+    # Fallback: compactar separadores para tolerar espacios/caracteres Unicode
+    # anómalos de Google Sheets sin cambiar el significado de la palabra.
+    compact = normalized.str.replace(r"[^A-Z0-9]+", "", regex=True)
+    q_compact = re.sub(r"[^A-Z0-9]+", "", q)
+    if len(q_compact) >= 3 and compact.str.contains(
+        re.escape(q_compact), regex=False, na=False
+    ).any():
+        return q
+
+    return ""
+
+
+def find_procedure_candidate(query: str, procedure_index: pd.DataFrame) -> Tuple[str, str]:
+    """Identifica una familia de procedimiento sin convertirla en un único registro.
+
+    Si el usuario escribe COMPRAVENTA, devolvemos COMPRAVENTA como criterio de
+    procedimiento y luego el filtro alcanza COMPRAVENTA DIRECTA,
+    REGULARIZACION ... DE COMPRAVENTA, etc.
+    """
+    if procedure_index.empty:
+        return "", query
+    q = normalize_search_phrase(query)
+    if not q:
+        return "", q
+
+    catalog = []
+    for _, row in procedure_index.iterrows():
+        original = str(row["original"]).strip()
+        norm_proc = normalize_search_phrase(original)
+        if norm_proc:
+            catalog.append((norm_proc, original))
+
+    # 0) Una sola palabra que aparezca como término completo dentro de cualquier
+    # procedimiento se interpreta como familia. Esto cubre, por ejemplo,
+    # CONSTITUCION aunque el nombre real sea CONSTITUCION DEL DERECHO DE SUPERFICIE.
+    if len(q.split()) == 1:
+        token_re = re.compile(rf"(?<![A-Z0-9]){re.escape(q)}(?![A-Z0-9])")
+        if any(token_re.search(norm_proc) for norm_proc, _ in catalog):
+            return q, ""
+
+        # Fallback adicional: compactamos la denominación del procedimiento
+        # para tolerar caracteres invisibles/espacios anómalos de Sheets.
+        q_compact = re.sub(r"[^A-Z0-9]+", "", q)
+        if q_compact:
+            if any(q_compact in re.sub(r"[^A-Z0-9]+", "", norm_proc) for norm_proc, _ in catalog):
+                return q, ""
+
+    # 1) Coincidencia exacta con un procedimiento del catálogo.
+    exact_map = {norm_proc: original for norm_proc, original in catalog}
+    if q in exact_map:
+        return exact_map[q], ""
+
+    # 2) Si la consulta aparece como frase completa dentro de uno o varios
+    # procedimientos, la tratamos como familia. Esto cubre CONSTITUCION, COMPRAVENTA,
+    # TRANSFERENCIA, SERVIDUMBRE y cualquier otra familia presente realmente en L.
+    family_hits = []
+    q_re = re.compile(rf"(?:^| ){re.escape(q)}(?: |$)")
+    for norm_proc, _ in catalog:
+        if q_re.search(norm_proc):
+            family_hits.append(norm_proc)
+    if family_hits:
+        cleaned = re.sub(rf"(?:^| ){re.escape(q)}(?: |$)", " ", q, count=1).strip()
+        return q, re.sub(r"\s+", " ", cleaned).strip()
+
+    # 3) Para consultas compuestas, buscar n-gramas exactos del texto en el catálogo.
+    words = [t for t in q.split() if t not in STOPWORDS and len(t) >= 4]
+    for size in range(min(4, len(words)), 0, -1):
+        for start in range(0, len(words) - size + 1):
+            phrase = " ".join(words[start:start + size])
+            phrase_re = re.compile(rf"(?:^| ){re.escape(phrase)}(?: |$)")
+            if any(phrase_re.search(norm_proc) for norm_proc, _ in catalog):
+                cleaned = re.sub(rf"(?:^| ){re.escape(phrase)}(?: |$)", " ", q, count=1)
+                return phrase, re.sub(r"\s+", " ", cleaned).strip()
+
+    # 4) Tolerancia ortográfica para una palabra/frase corta, pero usando ratio puro.
+    if words:
+        candidates = []
+        for phrase_size in range(min(3, len(words)), 0, -1):
+            for start in range(0, len(words) - phrase_size + 1):
+                phrase = " ".join(words[start:start + phrase_size])
+                if RAPIDFUZZ_AVAILABLE:
+                    matches = process.extract(phrase, [x[0] for x in catalog], scorer=fuzz.ratio, limit=3)
+                    for _, score, idx in matches:
+                        if float(score) >= 93:
+                            candidates.append((phrase, float(score)))
+                else:
+                    for norm_proc, _ in catalog:
+                        score = SequenceMatcher(None, phrase, norm_proc).ratio() * 100
+                        if score >= 93:
+                            candidates.append((phrase, score))
+                if candidates:
+                    phrase, _ = max(candidates, key=lambda x: x[1])
+                    cleaned = q.replace(phrase, " ", 1)
+                    return phrase, re.sub(r"\s+", " ", cleaned).strip()
+    return "", q
+
+
+def has_entity_cue(text: str) -> bool:
+    tokens = set(normalize_search_phrase(text).split())
+    return bool(tokens & {singularize_token(x) for x in ENTITY_CUES})
+
+
+def choose_field_intent(
+    df: pd.DataFrame,
+    text: str,
+    cols: Dict[str, Optional[str]],
+    allow_ambiguity: bool = True,
+) -> Tuple[str, str, float, Optional[Tuple[str, str]]]:
+    """
+    Decide si una consulta encaja mejor en Procedimiento o Entidad/Administrado.
+    Devuelve (campo, valor, score, ambigüedad).
+    La prioridad institucional es: procedimiento conocido > entidad genérica,
+    salvo cuando el contexto contiene una señal clara de entidad.
+    """
+    q = normalize_search_phrase(text)
+    if not q:
+        return "", "", 0.0, None
+
+    entity_mask, entity_score = exact_or_fuzzy_field_mask(
+        df, cols.get("entidad"), q, min_score=70
+    )
+    proc_mask, proc_score = procedure_field_mask(
+        df, cols.get("procedimiento"), q
+    )
+
+    # Coincidencia exacta con un procedimiento del catálogo: máxima prioridad.
+    proc_exact = False
+    proc_original = q
+    proc_col = cols.get("procedimiento")
+    if proc_col and proc_col in df.columns:
+        norm_values = {normalize_search_phrase(v): v for v in unique_clean_values(df, proc_col)}
+        if q in norm_values:
+            proc_exact = True
+            proc_original = norm_values[q]
+            proc_score = 100.0
+
+    if has_entity_cue(q) and entity_mask.any() and entity_score >= 70:
+        return "entidad", q, entity_score, None
+
+    if proc_exact and proc_mask.any():
+        return "procedimiento", proc_original, 100.0, None
+
+    if entity_mask.any() and proc_mask.any():
+        diff = abs(entity_score - proc_score)
+        # Solo mostramos una elección cuando EXISTEN coincidencias fuertes en
+        # ambos campos. Una coincidencia débil o casual en Administrado no
+        # debe generar una falsa ambigüedad.
+        STRONG_AMBIGUITY_SCORE = 90
+        MAX_AMBIGUITY_SCORE_DIFF = 5
+        if (
+            allow_ambiguity
+            and entity_score >= STRONG_AMBIGUITY_SCORE
+            and proc_score >= STRONG_AMBIGUITY_SCORE
+            and diff <= MAX_AMBIGUITY_SCORE_DIFF
+        ):
+            return "", q, max(entity_score, proc_score), (q, q)
+
+        # Si solo uno de los campos tiene una coincidencia claramente fuerte,
+        # priorizamos ese campo sin preguntar al usuario.
+        if proc_score >= entity_score:
+            return "procedimiento", q, proc_score, None
+        return "entidad", q, entity_score, None
+
+    if proc_mask.any() and proc_score >= 72:
+        return "procedimiento", q, proc_score, None
+    if entity_mask.any() and entity_score >= 70:
+        return "entidad", q, entity_score, None
+
+    # Si no hay match directo, intentamos el catálogo de procedimientos para
+    # detectar una palabra/fragmento dentro de una consulta más larga.
+    return "", q, max(entity_score, proc_score), None
+
+
+def procedure_in_catalog(text: str, procedure_index: pd.DataFrame) -> Tuple[str, float]:
+    q = normalize_search_phrase(text)
+    if not q or procedure_index.empty:
+        return "", 0.0
+    exact_map = {normalize_search_phrase(v): v for v in procedure_index["original"].tolist()}
+    if q in exact_map:
+        return exact_map[q], 100.0
+    matches, score = fuzzy_candidates(procedure_index, q, min_score=82, limit=5)
+    return (matches[0], score) if matches else ("", 0.0)
+
+
+def attach_interpretation(p: ParsedQuery, field: str, value: str) -> None:
+    if not value:
+        return
+    label = "Procedimiento" if field == "procedimiento" else "Entidad / administrado"
+    shown = value if field == "procedimiento" else value.title()
+    p.interpretation.append((label, shown))
+
+
+def parse_query(
+    query: str,
+    df: pd.DataFrame,
+    cols: Dict[str, Optional[str]],
+    entity_index: pd.DataFrame,
+    procedure_index: pd.DataFrame,
+    geo_values: List[str],
+) -> ParsedQuery:
+    p = ParsedQuery()
+    p.raw = query.strip()
+
+    work, normative_key = extract_normative(query)
+    p.normative_key = normative_key
+    if normative_key:
+        p.interpretation.append(("Marco normativo", normative_key))
+
+    work, y1, y2, explicit_year = extract_years(work)
+    work, status = extract_status(normalize_search_phrase(work))
+    p.year_min, p.year_max, p.year_explicit = y1, y2, explicit_year
+    p.status_group = status
+
+    if status:
+        p.interpretation.append(("Situación", "Atendidos" if status == "ATENDIDOS" else "En trámite"))
+    if y1 is not None:
+        p.interpretation.append(("Periodo", str(y1) if y1 == y2 else f"{y1}–{y2}"))
+
+    # 1) Búsqueda directa por expediente.
+    expediente_col = cols.get("expediente")
+    if expediente_col and re.search(r"\d", work):
+        compact = re.sub(r"\s+", "", work)
+        if re.search(r"\d{2,}[-/]\d{2,4}", compact) or (
+            len(compact) <= 30 and re.search(r"\d", compact) and not p.year_explicit
+        ):
+            p.direct_expediente = True
+            p.cleaned = work
+            p.mode = "expediente"
+            p.interpretation.insert(0, ("Expediente", query.strip()))
+            return p
+
+    # 2) Consulta de una sola palabra que pertenece a una familia de procedimiento.
+    # Se evalúa ANTES de geografía porque algunas denominaciones de procedimiento
+    # pueden coincidir también con nombres geográficos. Un ejemplo real es
+    # "CONSTITUCION", que también puede ser un nombre geográfico.
+    direct_family = direct_single_term_procedure_family(
+        df, cols.get("procedimiento"), work
+    )
+    if direct_family:
+        p.procedure_text = direct_family
+        p.interpretation.append(("Procedimiento", direct_family.title()))
+        p.mode = "procedimiento"
+        p.cleaned = ""
+        return p
+
+    # 3) Extraer geografía. La ubicación es un criterio obligatorio si la consulta la contiene.
+    geo_match, residual = find_geo_phrase(work, geo_values)
+    if geo_match:
+        p.location_text = geo_match
+        p.interpretation.append(("Ubicación", geo_match.title()))
+
+    # 4) Forma explícita "X EN Y". Se prioriza procedimiento cuando X pertenece
+    # a un procedimiento conocido; entidad gana cuando la frase contiene señales fuertes de entidad.
+    m = re.search(r"\bEN\b", work)
+    if m:
+        left = work[:m.start()].strip()
+        right = work[m.end():].strip()
+        if left and right:
+            geo_right, _ = find_geo_phrase(right, geo_values)
+            if geo_right:
+                p.location_text = geo_right
+                # Prioridad: procedimiento conocido -> entidad -> ambigüedad.
+                proc_exact, proc_exact_score = procedure_in_catalog(left, procedure_index)
+                kind, value, score, ambiguity = choose_field_intent(df, left, cols, allow_ambiguity=True)
+                if proc_exact and proc_exact_score >= 100:
+                    p.procedure_text = proc_exact
+                    p.interpretation.append(("Procedimiento", proc_exact))
+                elif kind == "procedimiento":
+                    p.procedure_text = value
+                    p.interpretation.append(("Procedimiento", value))
+                elif kind == "entidad":
+                    p.entity_text = left
+                    p.interpretation.append(("Entidad / administrado", left.title()))
+                elif ambiguity:
+                    p.ambiguous = True
+                    p.ambiguity_entity_text = left
+                    p.ambiguity_procedure_text = left
+                    # Aplicación por defecto: procedimiento, por la jerarquía institucional.
+                    p.procedure_text = left
+                    p.interpretation.append(("Procedimiento", left.title()))
+                else:
+                    # Último recurso: entidad para mantener búsquedas naturales como "Sedapal en Piura".
+                    p.entity_text = left
+                    p.interpretation.append(("Entidad / administrado", left.title()))
+                p.mode = "compuesta"
+                p.cleaned = ""
+                return p
+
+    # 5) Si la consulta contiene una señal fuerte de entidad (por ejemplo,
+    # "empresa", "municipalidad", "gobierno", "sociedad"), damos prioridad
+    # a la entidad completa antes de interpretar una palabra interna como procedimiento.
+    if not p.location_text and has_entity_cue(work) and cols.get("entidad"):
+        entity_matches, entity_score = fuzzy_candidates(entity_index, work, min_score=70, limit=40)
+        if entity_matches and entity_score >= 70:
+            p.entity_text = work
+            p.interpretation.append(("Entidad / administrado", work.title()))
+            p.mode = "entidad"
+            p.cleaned = ""
+            return p
+
+    # 6) Buscar un procedimiento conocido en cualquier parte de la consulta restante.
+    proc, proc_residual = find_procedure_candidate(work, procedure_index)
+    if proc:
+        p.procedure_text = proc
+        p.interpretation.append(("Procedimiento", proc))
+        p.cleaned = proc_residual
+        if p.location_text:
+            p.mode = "compuesta"
+            p.cleaned = ""
+        else:
+            p.mode = "procedimiento"
+            if proc_residual:
+                # Si todavía queda una frase de entidad reconocible, la añadiremos abajo.
+                kind, value, score, ambiguity = choose_field_intent(df, proc_residual, cols, allow_ambiguity=True)
+                if kind == "entidad":
+                    p.entity_text = value
+                    p.interpretation.append(("Entidad / administrado", value.title()))
+                    p.cleaned = ""
+                elif kind == "procedimiento":
+                    p.cleaned = ""
+        return p
+
+    # 7) Si toda la frase coincide fuertemente con una entidad, tratarla como entidad.
+    if cols.get("entidad"):
+        entity_matches, entity_score = fuzzy_candidates(entity_index, work, min_score=70, limit=40)
+        if entity_matches and entity_score >= 70:
+            p.entity_text = work
+            p.interpretation.append(("Entidad / administrado", work.title()))
+            p.mode = "compuesta" if p.location_text else "entidad"
+            p.cleaned = ""
+            return p
+
+    # 8) Residuo + ubicación, por ejemplo "municipalidades de Piura" o
+    # "gobierno regional de Arequipa".
+    if p.location_text and residual:
+        kind, value, score, ambiguity = choose_field_intent(df, residual, cols, allow_ambiguity=True)
+        if kind == "procedimiento":
+            p.procedure_text = value
+            p.interpretation.append(("Procedimiento", value))
+        elif kind == "entidad":
+            p.entity_text = value
+            p.interpretation.append(("Entidad / administrado", value.title()))
+        elif ambiguity:
+            p.ambiguous = True
+            p.ambiguity_entity_text = residual
+            p.ambiguity_procedure_text = residual
+            p.procedure_text = residual
+            p.interpretation.append(("Procedimiento", residual.title()))
+        else:
+            p.entity_text = residual
+            p.interpretation.append(("Entidad / administrado", residual.title()))
+        p.mode = "compuesta"
+        p.cleaned = ""
+        return p
+
+    # 9) Ubicación sola.
+    if p.location_text:
+        p.mode = "ubicacion"
+        p.cleaned = residual
+        return p
+
+    # 10) Búsqueda libre: todos los términos significativos deben participar.
+    # Si hay ambigüedad fuerte, la mostramos en UI; si no, se mantiene la búsqueda AND.
+    p.cleaned = work
+    p.interpretation.append(("Búsqueda", work.title()))
+    p.mode = "general"
+    return p
+
+
+# ============================================================================== 
+# MOTOR DE APLICACIÓN DE LA CONSULTA
+# ============================================================================== 
+
+
+def status_group_mask(df: pd.DataFrame, estado_col: Optional[str], group: str) -> pd.Series:
+    if not estado_col or estado_col not in df.columns or not group:
+        return pd.Series(True, index=df.index)
+    s = df[estado_col].astype(str).map(normalize_text)
+    if group == "ATENDIDOS":
+        return (
+            s.str.contains("ARCHIVADO", regex=False, na=False)
+            | s.str.contains("RESOLUCION EMITIDA", regex=False, na=False)
+            | s.str.contains("RESOLUCION CONSENTIDA", regex=False, na=False)
+        )
+    if group == "EN TRAMITE":
+        return (
+            s.str.contains("GENERADO", regex=False, na=False)
+            | s.str.contains("CON FICHA TECNICA", regex=False, na=False)
+            | s.str.contains("TRAMITE", regex=False, na=False)
+            | s.str.contains("SUSPENDIDO CON RESOLUCION", regex=False, na=False)
+        )
+    return pd.Series(True, index=df.index)
+
+
+def year_mask(df: pd.DataFrame, anio_col: Optional[str], y1: Optional[int], y2: Optional[int]) -> pd.Series:
+    if not anio_col or y1 is None or y2 is None:
+        return pd.Series(True, index=df.index)
+    years = pd.to_numeric(
+        df[anio_col].astype(str).str.extract(r"((?:19|20)\d{2})")[0],
+        errors="coerce",
+    )
+    return years.between(y1, y2, inclusive="both").fillna(False)
+
+
+def apply_parsed_query(df: pd.DataFrame, p: ParsedQuery, cols: Dict[str, Optional[str]], entity_index: pd.DataFrame) -> pd.DataFrame:
+    work = df.copy()
+
+    if p.direct_expediente and cols.get("expediente"):
+        q = normalize_text(p.raw)
+        work = work[work[cols["expediente"]].astype(str).map(normalize_text).str.contains(q, regex=False, na=False)]
+    else:
+        mask = pd.Series(True, index=work.index)
+
+        if p.entity_text and cols.get("entidad"):
+            # La entidad se trata con tolerancia dentro del campo D, pero como condición AND.
+            entity_mask, _ = exact_or_fuzzy_field_mask(work, cols["entidad"], p.entity_text, min_score=70)
+            mask &= entity_mask
+
+        if p.procedure_text and cols.get("procedimiento"):
+            proc_mask, proc_score = procedure_field_mask(
+                work, cols["procedimiento"], p.procedure_text
+            )
+
+            # Para una sola palabra de procedimiento, aseguramos el concepto
+            # de "familia" directamente sobre la columna L.
+            q_proc = normalize_search_phrase(p.procedure_text)
+            if len(q_proc.split()) == 1 and not proc_mask.any():
+                raw_proc = work[cols["procedimiento"]].astype(str)
+                norm_proc = raw_proc.map(normalize_text)
+                token_re = rf"(?<![A-Z0-9]){re.escape(q_proc)}(?![A-Z0-9])"
+                proc_mask = norm_proc.str.contains(token_re, regex=True, na=False)
+
+                if not proc_mask.any():
+                    compact_series = norm_proc.str.replace(
+                        r"[^A-Z0-9]+", "", regex=True
+                    )
+                    compact_q = re.sub(r"[^A-Z0-9]+", "", q_proc)
+                    if compact_q:
+                        proc_mask = compact_series.str.contains(
+                            re.escape(compact_q), regex=False, na=False
+                        )
+
+            mask &= proc_mask
+
+        if p.normative_key and cols.get("marco_normativo"):
+            norm_col = cols["marco_normativo"]
+            norm_series = work[norm_col].astype(str).map(normalize_text)
+            if p.normative_key == "DL 1192":
+                norm_mask = (norm_series.str.contains("1192", regex=False, na=False) | norm_series.str.contains("DECRETO LEGISLATIVO 1192", regex=False, na=False))
+            elif p.normative_key == "LEY 30556":
+                norm_mask = (norm_series.str.contains("30556", regex=False, na=False) | norm_series.str.contains("LEY 30556", regex=False, na=False))
+            elif p.normative_key == "LEY 29151":
+                norm_mask = (norm_series.str.contains("29151", regex=False, na=False) | norm_series.str.contains("LEY 29151", regex=False, na=False))
+            else:
+                generic_num = re.search(r"(\d{3,5})$", p.normative_key)
+                norm_mask = norm_series.str.contains(generic_num.group(1), regex=False, na=False) if generic_num else pd.Series(False, index=work.index)
+            mask &= norm_mask
+
+        if p.location_text:
+            geo_mask = pd.Series(False, index=work.index)
+            for key in ("departamento", "provincia", "distrito"):
+                col = cols.get(key)
+                if col:
+                    geo_mask |= mask_contains(work[col], p.location_text)
+            # Ubicación es obligatoria cuando fue interpretada.
+            mask &= geo_mask
+
+        if p.status_group:
+            mask &= status_group_mask(work, cols.get("estado"), p.status_group)
+
+        if p.year_explicit:
+            mask &= year_mask(work, cols.get("anio"), p.year_min, p.year_max)
+
+        if p.mode == "general" and p.cleaned:
+            tokens = [singularize_token(t) for t in normalize_text(p.cleaned).split() if t not in STOPWORDS and len(t) >= 2]
+            search_fields = [cols.get("entidad"), cols.get("procedimiento"), cols.get("departamento"), cols.get("provincia"), cols.get("distrito")]
+            search_fields = [x for x in search_fields if x]
+            for token in tokens:
+                token_match = pd.Series(False, index=work.index)
+                for col in search_fields:
+                    token_match |= mask_contains(work[col], token)
+                mask &= token_match
+
+        work = work[mask]
+
+    return work
+
+
+# ============================================================================== 
+# PRIVACIDAD
+# ============================================================================== 
+
+LEGAL_ENTITY_RE = re.compile(
+    r"MUNICIPALIDAD|MUNICIPIO|GOBIERNO|MINISTERIO|REGIONAL|MINERA|MINER[A-Z]*|"
+    r"SOCIEDAD|INVERSIONES|EMPRESA|COMPA(N|Ñ)IA|CORPORACION|ASOCIACION|COMUNIDAD|"
+    r"CONSORCIO|DIRECCION|SUPERINTENDENCIA|UNIVERSIDAD|COOPERATIVA|SINDICATO|"
+    r"FUNDACION|PROYECTO|IGLESIA|COMITE|JUNTA|ORGANISMO|INSTITUTO|BANCO|CAJA|"
+    r"INMOBILIARIA|ONG|S\.\s*A|S\.\s*R\.\s*L|E\.\s*I\.\s*R\.\s*L|"
+    r"PERSONA JURIDICA", re.IGNORECASE
+)
+
+
+def aplicar_privacidad_venta(df_resultados: pd.DataFrame, cols: Dict[str, Optional[str]]) -> pd.DataFrame:
+    out = df_resultados.copy()
+    proc_col = cols.get("procedimiento")
+    admin_col = cols.get("entidad")
+    if not proc_col or not admin_col or proc_col not in out.columns or admin_col not in out.columns:
+        return out
+
+    proc = out[proc_col].astype(str).map(normalize_text)
+    admin = out[admin_col].astype(str).map(normalize_text)
+    # COMPRAVENTA también debe activar la regla.
+    venta = proc.str.contains("VENTA", regex=False, na=False)
+    juridica = admin.str.contains(LEGAL_ENTITY_RE, regex=True, na=False)
+    out.loc[venta & ~juridica, admin_col] = "PERSONA NATURAL"
+    return out
+
 # ==============================================================================
 # FLUJO PRINCIPAL
 # ==============================================================================
-tab_gestion, tab_produccion = st.tabs(["📁 Gestión de Expedientes", "📊 Avance de Producción"])
+tab_gestion, tab_produccion, tab_busqueda = st.tabs(["📁 Gestión de Expedientes", "📊 Avance de Producción", "🔎 Búsqueda de Expedientes"])
 
 with tab_gestion:
     try:
@@ -798,6 +1816,339 @@ setTimeout(function() {
 }, 400);
 </script>
 """, height=0, width=0)
+
+
+# ============================================================================== 
+# TERCER MÓDULO: BÚSQUEDA DE EXPEDIENTES
+# ============================================================================== 
+
+def render_busqueda_expedientes():
+    """Renderiza el buscador avanzado sin alterar los módulos operativos existentes."""
+    @st.cache_data(ttl=300, show_spinner=False)
+    def _cargar_busqueda():
+        return cargar_universo_online()
+
+    try:
+        with st.spinner("Conectando con el Universo de Expedientes..."):
+            df_u = _cargar_busqueda()
+    except Exception:
+        st.error("No fue posible cargar la pestaña 'UNIVERSO EXP.' desde Google Sheets. Verifica la conexión a Internet y que la pestaña esté disponible.")
+        return
+
+    if df_u.empty:
+        st.warning("La pestaña 'UNIVERSO EXP.' no contiene registros.")
+        return
+
+    cols_u = infer_columns(df_u)
+    if not cols_u["expediente"] or not cols_u["entidad"] or not cols_u["procedimiento"]:
+        st.error("No se pudieron identificar las columnas A (expediente), D (entidad) y L (procedimiento).")
+        return
+
+    entity_index_u = build_index(df_u, cols_u["entidad"])
+    procedure_index_u = build_index(df_u, cols_u["procedimiento"])
+    geo_values_u = []
+    for key in ("departamento", "provincia", "distrito"):
+        geo_values_u.extend(unique_clean_values(df_u, cols_u.get(key)))
+    geo_values_u = sorted(set(geo_values_u), key=lambda x: (-len(normalize_text(x)), normalize_text(x)))
+
+    prefix = "ux_"
+    if f"{prefix}initialized" not in st.session_state:
+        st.session_state[f"{prefix}initialized"] = True
+        st.session_state[f"{prefix}query"] = ""
+        st.session_state[f"{prefix}searched"] = False
+        st.session_state[f"{prefix}parsed"] = None
+        st.session_state[f"{prefix}situation"] = "Todas"
+        st.session_state[f"{prefix}normative"] = "Todos"
+        st.session_state[f"{prefix}filter_version"] = 0
+        st.session_state[f"{prefix}dep"] = "Todos"
+        st.session_state[f"{prefix}prov"] = "Todos"
+        st.session_state[f"{prefix}dist"] = "Todos"
+        st.session_state[f"{prefix}state"] = "Todos"
+
+    def reset_search():
+        st.session_state[f"{prefix}query"] = ""
+        st.session_state[f"{prefix}searched"] = False
+        st.session_state[f"{prefix}parsed"] = None
+        st.session_state[f"{prefix}situation"] = "Todas"
+        st.session_state[f"{prefix}normative"] = "Todos"
+        st.session_state[f"{prefix}filter_version"] = st.session_state.get(f"{prefix}filter_version", 0) + 1
+        st.session_state[f"{prefix}dep"] = "Todos"
+        st.session_state[f"{prefix}prov"] = "Todos"
+        st.session_state[f"{prefix}dist"] = "Todos"
+        st.session_state[f"{prefix}state"] = "Todos"
+
+    # Estilos aislados del módulo de búsqueda + responsive móvil.
+    st.markdown("""
+    <style>
+      .ux-title {font-size:22px;font-weight:800;color:#1a252f;margin:3px 0 2px 0}
+      .ux-hint {font-size:12px;color:#657079;line-height:1.35;margin-bottom:8px}
+      .ux-summary {background:#fff;border:1px solid #c9ced3;padding:5px 8px;height:46px;}
+      .ux-summary-label {font-size:8px;color:#667085;text-transform:uppercase;line-height:1}
+      .ux-summary-value {font-size:17px;font-weight:800;color:#202428;line-height:1.05;margin-top:3px}
+      .ux-result-count {background:#fff;border-left:4px solid #1d70b8;padding:9px 12px;font-weight:800;margin:9px 0}
+      .ux-section-note {font-size:11px;color:#667085;margin:1px 0 3px 0}
+      .ux-download {margin:4px 0 6px 0}
+      @media(max-width:768px){
+        .ux-title{font-size:18px}
+        .ux-hint{font-size:11px}
+        .ux-summary{height:44px;padding:4px 6px}
+        .ux-summary-label{font-size:7px}
+        .ux-summary-value{font-size:15px}
+      }
+    </style>
+    """, unsafe_allow_html=True)
+
+    st.markdown('<div class="ux-title">🔎 Buscar en el universo</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="ux-hint">Puede escribir una entidad, un administrado, un procedimiento, una ubicación, un expediente o combinar varios datos. Ej.: <b>“transferencias en Lima del 2020 al 2024”</b> o <b>“municipalidades de Piura atendidas”</b>.</div>',
+        unsafe_allow_html=True,
+    )
+
+    query = st.text_input(
+        "Entidad, administrado, expediente o consulta",
+        placeholder="Ej.: Sedapal en Piura / Gobierno Regional de Arequipa 2020–2021",
+        key=f"{prefix}query",
+    )
+    b1, b2 = st.columns([2.6, 1.35])
+    with b1:
+        buscar_u = st.button("🔎 Buscar", type="primary", use_container_width=True, key=f"{prefix}buscar")
+    with b2:
+        st.button("Limpiar búsqueda", use_container_width=True, on_click=reset_search, key=f"{prefix}limpiar")
+
+    if buscar_u:
+        st.session_state[f"{prefix}filter_version"] += 1
+        st.session_state[f"{prefix}situation"] = "Todas"
+        st.session_state[f"{prefix}normative"] = "Todos"
+        st.session_state[f"{prefix}dep"] = "Todos"
+        st.session_state[f"{prefix}prov"] = "Todos"
+        st.session_state[f"{prefix}dist"] = "Todos"
+        st.session_state[f"{prefix}state"] = "Todos"
+        if not query.strip():
+            st.session_state[f"{prefix}searched"] = False
+            st.session_state[f"{prefix}parsed"] = None
+        else:
+            parsed_u = parse_query(query, df_u, cols_u, entity_index_u, procedure_index_u, geo_values_u)
+            st.session_state[f"{prefix}parsed"] = parsed_u
+            st.session_state[f"{prefix}searched"] = True
+
+    base_u = df_u.copy()
+    parsed_u = st.session_state.get(f"{prefix}parsed")
+
+    if st.session_state.get(f"{prefix}searched") and parsed_u:
+        # Ambigüedad solo cuando el motor realmente encontró evidencia fuerte en ambos campos.
+        if parsed_u.ambiguous:
+            st.markdown(
+                "<div style='background:#fff9e6;border:1px solid #e8d899;padding:7px 9px;color:#6b5b00;font-size:11px;margin:8px 0;'>La consulta puede referirse a dos campos. Seleccione la interpretación que desea usar.</div>",
+                unsafe_allow_html=True,
+            )
+            choice = st.radio(
+                "Interpretación",
+                [
+                    f"Procedimiento: {parsed_u.ambiguity_procedure_text.title()}",
+                    f"Administrado / entidad: {parsed_u.ambiguity_entity_text.title()}",
+                ],
+                index=0,
+                horizontal=True,
+                key=f"{prefix}ambiguity_{st.session_state[f'{prefix}filter_version']}",
+                label_visibility="collapsed",
+            )
+            if choice.startswith("Procedimiento:"):
+                parsed_u.entity_text = ""
+                parsed_u.procedure_text = parsed_u.ambiguity_procedure_text
+            else:
+                parsed_u.procedure_text = ""
+                parsed_u.entity_text = parsed_u.ambiguity_entity_text
+
+        base_u = apply_parsed_query(base_u, parsed_u, cols_u, entity_index_u)
+
+    # Filtros compactos en línea en lugar de sidebar; así no interfieren con la UI original
+    # y se comportan bien en celular (Streamlit apila las columnas automáticamente).
+    st.markdown('<div class="ux-section-note"><b>Situación y refinamiento</b></div>', unsafe_allow_html=True)
+    row1 = st.columns(4)
+
+    with row1[0]:
+        sit_options = ["Todas", "Atendidos", "En trámite"]
+        situation_u = st.radio(
+            "Situación",
+            sit_options,
+            index=sit_options.index(st.session_state.get(f"{prefix}situation", "Todas")),
+            horizontal=True,
+            key=f"{prefix}situation_widget_{st.session_state[f'{prefix}filter_version']}",
+        )
+        st.session_state[f"{prefix}situation"] = situation_u
+
+    # Marco normativo solo aparece si el universo consultado realmente contiene >=2 marcos.
+    detected_norms = []
+    norm_col = cols_u.get("marco_normativo")
+    if norm_col and len(base_u):
+        ns = base_u[norm_col].astype(str).map(normalize_text)
+        if ns.str.contains("1192", regex=False, na=False).any(): detected_norms.append("DL 1192")
+        if ns.str.contains("30556", regex=False, na=False).any(): detected_norms.append("Ley 30556")
+        if ns.str.contains("29151", regex=False, na=False).any(): detected_norms.append("Ley 29151")
+
+    normative_u = "Todos"
+    with row1[1]:
+        if len(detected_norms) >= 2:
+            options_n = ["Todos"] + detected_norms
+            current = st.session_state.get(f"{prefix}normative", "Todos")
+            if current not in options_n: current = "Todos"
+            normative_u = st.radio(
+                "Marco normativo",
+                options_n,
+                index=options_n.index(current),
+                horizontal=True,
+                key=f"{prefix}normative_widget_{st.session_state[f'{prefix}filter_version']}",
+            )
+        else:
+            st.markdown("<div style='font-size:11px;color:#667085;padding-top:1.45rem;'>Marco normativo: no requiere segmentación</div>", unsafe_allow_html=True)
+        st.session_state[f"{prefix}normative"] = normative_u
+
+    # El resto de columnas son selectores compactos; se construyen según el universo actual.
+    work_u = base_u.copy()
+    if situation_u != "Todas":
+        work_u = work_u[status_group_mask(work_u, cols_u.get("estado"), "ATENDIDOS" if situation_u == "Atendidos" else "EN TRAMITE")]
+    if normative_u != "Todos" and norm_col:
+        number = {"DL 1192":"1192", "Ley 30556":"30556", "Ley 29151":"29151"}[normative_u]
+        work_u = work_u[work_u[norm_col].astype(str).map(normalize_text).str.contains(number, regex=False, na=False)]
+
+    for idx, (key, label) in enumerate([
+        ("departamento", "Departamento"),
+        ("provincia", "Provincia"),
+        ("distrito", "Distrito"),
+    ], start=2):
+        if idx >= 4: break
+        col = cols_u.get(key)
+        with row1[idx]:
+            if col:
+                values = ["Todos"] + sorted(unique_clean_values(work_u, col))
+                sel = st.selectbox(label, values, key=f"{prefix}{key}_{st.session_state[f'{prefix}filter_version']}")
+                st.session_state[f"{prefix}{key}"] = sel
+                if sel != "Todos": work_u = work_u[work_u[col].astype(str).str.strip() == sel]
+
+    # Segunda fila: entidad, estado original, año.
+    row2 = st.columns(3)
+    mostrar_entidad = not (parsed_u and parsed_u.entity_text)
+    if mostrar_entidad:
+        with row2[0]:
+            ent_col = cols_u.get("entidad")
+            values = ["Todas"] + sorted(unique_clean_values(work_u, ent_col))[:500]
+            ent_sel = st.selectbox("Administrado / entidad", values, key=f"{prefix}entidad_{st.session_state[f'{prefix}filter_version']}")
+            st.session_state[f"{prefix}entidad"] = ent_sel
+            if ent_sel != "Todas": work_u = work_u[work_u[ent_col].astype(str).str.strip() == ent_sel]
+    else:
+        row2[0].markdown("<div style='font-size:11px;color:#667085;padding-top:1.45rem;'>Administrado/entidad ya forma parte de la consulta</div>", unsafe_allow_html=True)
+
+    if cols_u.get("estado"):
+        with row2[1]:
+            estados = ["Todos"] + sorted(unique_clean_values(work_u, cols_u["estado"]))
+            state_sel = st.selectbox("Estado original", estados, key=f"{prefix}state_{st.session_state[f'{prefix}filter_version']}")
+            st.session_state[f"{prefix}state"] = state_sel
+            if state_sel != "Todos": work_u = work_u[work_u[cols_u["estado"]].astype(str).str.strip() == state_sel]
+
+    if cols_u.get("anio"):
+        years = pd.to_numeric(work_u[cols_u["anio"]].astype(str).str.extract(r"((?:19|20)\d{2})")[0], errors="coerce")
+        available = sorted(years.dropna().astype(int).unique().tolist())
+        with row2[2]:
+            if len(available) >= 2:
+                start = parsed_u.year_min if parsed_u and parsed_u.year_min in available else min(available)
+                end = parsed_u.year_max if parsed_u and parsed_u.year_max in available else max(available)
+                start = max(min(available), start); end = min(max(available), end)
+                if start > end: start, end = min(available), max(available)
+                year_sel = st.slider("Año", min_value=min(available), max_value=max(available), value=(start, end), step=1, key=f"{prefix}year_{st.session_state[f'{prefix}filter_version']}")
+                years_now = pd.to_numeric(work_u[cols_u["anio"]].astype(str).str.extract(r"((?:19|20)\d{2})")[0], errors="coerce")
+                work_u = work_u[years_now.between(year_sel[0], year_sel[1], inclusive="both").fillna(False)]
+            elif len(available) == 1:
+                st.markdown(f"<div style='font-size:11px;color:#667085;padding-top:1.45rem;'>Año disponible: <b>{available[0]}</b></div>", unsafe_allow_html=True)
+
+    # Mostrar resultados.
+    st.markdown(f'<div class="ux-result-count">{len(work_u):,} expediente(s) encontrados</div>', unsafe_allow_html=True)
+
+    if work_u.empty:
+        st.warning("No encontramos expedientes que cumplan todos los criterios indicados. Puede probar una denominación más amplia o aportar menos criterios.")
+        return
+
+    # Resumen compacto.
+    metrics = [
+        ("Expedientes", len(work_u)),
+        ("Entidades", work_u[cols_u["entidad"]].nunique() if cols_u.get("entidad") else "—"),
+        ("Departamentos", work_u[cols_u["departamento"]].nunique() if cols_u.get("departamento") else "—"),
+        ("Años", work_u[cols_u["anio"]].astype(str).str.extract(r"((?:19|20)\d{2})")[0].nunique() if cols_u.get("anio") else "—"),
+    ]
+    cards = st.columns(4, gap="small")
+    for card, (label, value) in zip(cards, metrics):
+        with card:
+            display = f"{value:,}" if isinstance(value, (int, float)) else str(value)
+            st.markdown(f'<div class="ux-summary"><div class="ux-summary-label">{label}</div><div class="ux-summary-value">{display}</div></div>', unsafe_allow_html=True)
+
+    display_u = aplicar_privacidad_venta(work_u, cols_u)
+    display_cols = [
+        cols_u["expediente"], cols_u["entidad"], cols_u["procedimiento"],
+        cols_u.get("departamento"), cols_u.get("provincia"), cols_u.get("distrito"),
+        cols_u.get("anio"), cols_u.get("estado"),
+    ]
+    display_cols = [c for c in display_cols if c and c in display_u.columns]
+
+    buffer = io.BytesIO()
+    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+        display_u[display_cols].to_excel(writer, index=False, sheet_name="Resultados")
+    st.markdown('<div class="ux-download">', unsafe_allow_html=True)
+    st.download_button(
+        "📥 Descargar resultados en Excel",
+        data=buffer.getvalue(),
+        file_name="Consulta_Universo_Expedientes.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=False,
+        key=f"{prefix}download_{st.session_state[f'{prefix}filter_version']}",
+    )
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    st.markdown("### Resultados")
+
+    # Tabla escritorio + tarjetas móviles. Cada fila abre Trámite Transparente.
+    rows = []
+    cards_html = []
+    for _, row in display_u.iterrows():
+        expediente = str(row.get(cols_u["expediente"], "")).strip()
+        url = "https://tramitetransparente.sbn.gob.pe/#auto=" + expediente
+        cells = []
+        pairs = []
+        for col in display_cols:
+            val = row.get(col, "")
+            if pd.isna(val): val = ""
+            txt = escape(str(val))
+            cells.append(f"<td>{txt}</td>")
+            pairs.append(f"<div class='ux-mrow'><span>{escape(str(col))}</span><b>{txt}</b></div>")
+        rows.append(
+            f"<tr class='ux-rrow' data-url='{escape(url, quote=True)}' onclick=\"window.open(this.dataset.url,'_blank')\">{''.join(cells)}</tr>"
+        )
+        cards_html.append(
+            f"<div class='ux-card' data-url='{escape(url, quote=True)}' onclick=\"window.open(this.dataset.url,'_blank')\">{''.join(pairs)}<div class='ux-open'>Abrir expediente ↗</div></div>"
+        )
+    headers = ''.join(f"<th>{escape(str(c))}</th>" for c in display_cols)
+    html = f"""
+    <style>
+      .ux-tablewrap{{overflow-x:auto;max-height:68vh;width:100%}}
+      .ux-table{{width:100%;border-collapse:collapse;font-size:12px;background:#fff}}
+      .ux-table th{{position:sticky;top:0;z-index:2;background:#f1f3f5;color:#505a5f;padding:8px;border:1px solid #d9dde1;text-align:left;white-space:nowrap}}
+      .ux-table td{{padding:8px;border:1px solid #e1e4e7;color:#202428;white-space:nowrap}}
+      .ux-rrow{{cursor:pointer}}
+      .ux-rrow:hover td{{background:#e8f3fb}}
+      .ux-mobile{{display:none}}
+      .ux-card{{background:#fff;border:1px solid #c9ced3;border-left:4px solid #1d70b8;border-radius:6px;margin:6px 0;padding:8px 9px;cursor:pointer}}
+      .ux-mrow{{display:grid;grid-template-columns:minmax(92px,38%) 1fr;gap:7px;padding:4px 0;border-bottom:1px solid #eef0f2;font-size:12px}}
+      .ux-mrow span{{color:#6b7277}}
+      .ux-mrow b{{color:#202428;word-break:break-word;font-weight:600}}
+      .ux-open{{margin-top:7px;text-align:right;color:#005ea8;font-weight:700;font-size:12px}}
+      @media(max-width:768px){{.ux-desktop{{display:none}}.ux-mobile{{display:block}}.ux-tablewrap{{max-height:none}}}}
+    </style>
+    <div class='ux-desktop'><div class='ux-tablewrap'><table class='ux-table'><thead><tr>{headers}</tr></thead><tbody>{''.join(rows)}</tbody></table></div></div>
+    <div class='ux-mobile'>{''.join(cards_html)}</div>
+    """
+    components.html(html, height=min(760, max(250, 85 + min(len(display_u), 18) * 34)), scrolling=False)
+
+
+with tab_busqueda:
+    render_busqueda_expedientes()
 
 with tab_produccion:
     st.markdown("<br><br><h2 style='text-align: center; color: #2C3E50;'>Estamos trabajando para integrar esta información, por lo pronto ingrese a:</h2><br>", unsafe_allow_html=True)
