@@ -2633,18 +2633,22 @@ def render_busqueda_expedientes():
 
       .ux-mobile{{display:none}}
 
-      /* Lista tabular compacta para teléfonos. */
-      .ux-mobile-tablewrap{{width:100%;overflow-x:hidden;background:#fff;border:1px solid #d9dde1;border-radius:5px}}
-      .ux-mobile-table{{width:100%;border-collapse:collapse;table-layout:fixed;font-size:10px;background:#fff}}
-      .ux-mobile-table th{{background:#f1f3f5;color:#505a5f;padding:7px 5px;border:1px solid #d9dde1;text-align:left;line-height:1.15}}
-      .ux-mobile-table td{{padding:7px 5px;border:1px solid #e1e4e7;color:#202428;vertical-align:top;line-height:1.25;word-break:break-word;overflow-wrap:anywhere}}
+      /* Tabla móvil deslizable: conserva la lista, pero evita comprimir
+         palabras y columnas hasta volverlas ilegibles. */
+      .ux-mobile-tablewrap{{width:100%;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;background:#fff;border:1px solid #d9dde1;border-radius:5px}}
+      .ux-mobile-table{{width:max-content;min-width:720px;border-collapse:collapse;table-layout:fixed;font-size:11px;background:#fff}}
+      .ux-mobile-table th{{background:#f1f3f5;color:#505a5f;padding:8px 7px;border:1px solid #d9dde1;text-align:left;line-height:1.15;white-space:nowrap;position:sticky;top:0;z-index:1}}
+      .ux-mobile-table td{{padding:8px 7px;border:1px solid #e1e4e7;color:#202428;vertical-align:top;line-height:1.3;white-space:nowrap}}
       .ux-mrow-table{{cursor:pointer}}
       .ux-mrow-table:active td{{background:#e8f3fb}}
-      .ux-mobile-table th:nth-child(1),.ux-mobile-table td:nth-child(1){{width:23%}}
-      .ux-mobile-table th:nth-child(2),.ux-mobile-table td:nth-child(2){{width:29%}}
-      .ux-mobile-table th:nth-child(3),.ux-mobile-table td:nth-child(3){{width:29%}}
-      .ux-mobile-table th:nth-child(4),.ux-mobile-table td:nth-child(4){{width:11%}}
-      .ux-mobile-table th:nth-child(5),.ux-mobile-table td:nth-child(5){{width:8%}}
+      .ux-mobile-table th:nth-child(1),.ux-mobile-table td:nth-child(1){{width:150px}}
+      .ux-mobile-table th:nth-child(2),.ux-mobile-table td:nth-child(2){{width:270px}}
+      .ux-mobile-table th:nth-child(3),.ux-mobile-table td:nth-child(3){{width:360px}}
+      .ux-mobile-table th:nth-child(4),.ux-mobile-table td:nth-child(4){{width:120px}}
+      .ux-mobile-table th:nth-child(5),.ux-mobile-table td:nth-child(5){{width:120px}}
+
+      /* Indicador visual sutil de que la tabla se puede deslizar. */
+      .ux-mobile-tablewrap::after{{content:"Desliza horizontalmente para ver más";display:block;padding:6px 8px;font-size:10px;color:#667085;background:#fafafa;border-top:1px solid #e1e4e7;text-align:right}}
 
       @media(max-width:768px){{
         .ux-desktop{{display:none}}
@@ -2672,7 +2676,7 @@ def render_busqueda_expedientes():
     </div>
     """
 
-    components.html(html, height=min(760, max(250, 85 + min(len(display_u), 18) * 34)), scrolling=False)
+    components.html(html, height=min(760, max(250, 112 + min(len(display_u), 16) * 38)), scrolling=False)
 
 
 with tab_busqueda:
