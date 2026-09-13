@@ -457,6 +457,115 @@ PUBLISHED_SHEET_URL = (
 )
 SHEET_NAME = "UNIVERSO EXP."
 
+
+# ---------------------------------------------------------------------
+# Resolución geográfica para consultas naturales.
+#
+# Objetivo:
+#   - "gobierno regional loreto" -> entidad + ubicación.
+#   - "municipalidad chosica" -> entidad + equivalencia geográfica.
+#
+# No sustituye los valores de la hoja. Solo añade términos de búsqueda
+# equivalentes cuando existe una relación geográfica suficientemente clara.
+# ---------------------------------------------------------------------
+GEOGRAPHIC_ALIASES = {
+    "chosica": ["CHOSICA", "LURIGANCHO", "LURIGANCHO-CHOSICA", "LURIGANCHO CHOSICA"],
+}
+
+def geo_aliases_for_term(term):
+    """Devuelve equivalencias geográficas conocidas para una consulta."""
+    key = normalize_text(term)
+    return GEOGRAPHIC_ALIASES.get(key, [term])
+
+def column_contains_any(df, col, terms):
+    """Máscara robusta: una columna contiene cualquiera de los términos."""
+    if not col or col not in df.columns:
+        return pd.Series(False, index=df.index)
+    series = df[col].astype(str).map(normalize_text)
+    mask = pd.Series(False, index=df.index)
+    for term in terms:
+        t = normalize_text(term)
+        if t:
+            mask = mask | series.str.contains(re.escape(t), regex=True, na=False)
+    return mask
+
+def apply_compound_entity_location(df, entity_col, geo_cols, entity_terms, location_terms):
+    """
+    Aplica AND entre entidad y ubicación.
+    La ubicación se busca en departamento/provincia/distrito y admite alias.
+    """
+    if df.empty:
+        return df
+
+    entity_mask = column_contains_any(df, entity_col, entity_terms)
+
+    geo_terms = []
+    for term in location_terms:
+        geo_terms.extend(geo_aliases_for_term(term))
+
+    geo_mask = pd.Series(False, index=df.index)
+    for col in geo_cols:
+        if col:
+            geo_mask = geo_mask | column_contains_any(df, col, geo_terms)
+
+    # Si se reconoció una ubicación, ambos criterios son obligatorios.
+    return df[entity_mask & geo_mask]
+
+def looks_like_entity_phrase(tokens):
+    """
+    Reconoce expresiones genéricas de entidad que suelen acompañar una
+    ubicación sin exigir que coincidan literalmente con toda la razón social.
+    """
+    normalized = [normalize_text(t) for t in tokens]
+    entity_words = {
+        "gobierno", "regional", "municipalidad", "municipalidades",
+        "municipio", "ministerio", "entidad", "sedapal"
+    }
+    return any(t in entity_words for t in normalized)
+
+def split_entity_location_phrase(text, known_locations):
+    """
+    Intenta separar una consulta del tipo:
+        'gobierno regional loreto'
+        'municipalidad chosica'
+
+    Devuelve (entity_tokens, location_tokens). Si no hay una ubicación
+    reconocible, devuelve (tokens, []) para no alterar las búsquedas actuales.
+    """
+    raw_tokens = re.findall(r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9-]+", str(text))
+    tokens = [t for t in raw_tokens if t.strip()]
+    if not tokens:
+        return [], []
+
+    norm_known = {}
+    for loc in known_locations:
+        n = normalize_text(loc)
+        if n:
+            norm_known[n] = loc
+
+    # Buscar una ubicación de una o varias palabras al final de la consulta.
+    # Priorizamos frases más largas para nombres compuestos.
+    for nloc, original in sorted(norm_known.items(), key=lambda x: len(x[0]), reverse=True):
+        loc_words = nloc.split()
+        if len(tokens) >= len(loc_words):
+            tail = " ".join(normalize_text(x) for x in tokens[-len(loc_words):])
+            if tail == nloc:
+                entity_tokens = tokens[:-len(loc_words)]
+                if entity_tokens and looks_like_entity_phrase(entity_tokens):
+                    return entity_tokens, [original]
+
+    # Alias que no necesariamente aparecen como valor literal en la hoja.
+    for alias in GEOGRAPHIC_ALIASES:
+        alias_words = alias.split()
+        if len(tokens) >= len(alias_words):
+            tail = " ".join(normalize_text(x) for x in tokens[-len(alias_words):])
+            if tail == normalize_text(alias):
+                entity_tokens = tokens[:-len(alias_words)]
+                if entity_tokens and looks_like_entity_phrase(entity_tokens):
+                    return entity_tokens, [alias]
+
+    return tokens, []
+
 def normalize_text(value) -> str:
     if pd.isna(value):
         return ""
@@ -2015,6 +2124,74 @@ def render_busqueda_expedientes():
             '<div class="ux-section-note">Los filtros aparecerán aquí después de realizar una búsqueda.</div>',
             unsafe_allow_html=True,
         )
+
+        # -------------------------------------------------------------
+        # Corrección quirúrgica para consultas "entidad + ubicación".
+        #
+        # Ejemplos:
+        #   Gobierno Regional Loreto
+        #   Municipalidad Chosica
+        #
+        # Solo se activa si podemos reconocer la ubicación y una expresión
+        # de entidad. Las demás consultas continúan por el motor original.
+        # -------------------------------------------------------------
+        try:
+            entity_col_u = cols_u.get("entidad")
+            geo_cols_u = [
+                cols_u.get("departamento"),
+                cols_u.get("provincia"),
+                cols_u.get("distrito"),
+            ]
+
+            known_geo_values = set()
+            for geo_col in geo_cols_u:
+                if geo_col and geo_col in base_u.columns:
+                    known_geo_values.update(
+                        str(v).strip()
+                        for v in base_u[geo_col].dropna().unique()
+                        if str(v).strip()
+                    )
+
+            raw_query_u = str(st.session_state.get(f"{prefix}query", "")).strip()
+            entity_tokens_u, location_tokens_u = split_entity_location_phrase(
+                raw_query_u, known_geo_values
+            )
+
+            if entity_tokens_u and location_tokens_u and entity_col_u:
+                entity_text_u = " ".join(entity_tokens_u)
+
+                # Evitamos exigir coincidencia literal de la frase completa:
+                # cada concepto relevante de la entidad debe estar presente.
+                entity_terms_u = [
+                    t for t in entity_tokens_u
+                    if normalize_text(t) not in {"de", "del", "la", "el", "los", "las"}
+                ]
+
+                # Solo intervenir para consultas con estructura de entidad.
+                if looks_like_entity_phrase(entity_tokens_u) and entity_terms_u:
+                    compound_u = apply_compound_entity_location(
+                        base_u,
+                        entity_col_u,
+                        geo_cols_u,
+                        entity_terms_u,
+                        location_tokens_u,
+                    )
+
+                    # Si la consulta compuesta tiene coincidencias reales,
+                    # usamos ese conjunto como universo de trabajo. Si no,
+                    # dejamos intacto el comportamiento original.
+                    if not compound_u.empty:
+                        work_u = compound_u.copy()
+                        st.session_state[f"{prefix}compound_interpretation"] = (
+                            entity_text_u,
+                            location_tokens_u[0],
+                        )
+                    else:
+                        st.session_state[f"{prefix}compound_interpretation"] = None
+        except Exception:
+            # Nunca dejar que una mejora auxiliar rompa el buscador principal.
+            st.session_state[f"{prefix}compound_interpretation"] = None
+
         work_u = base_u.copy()
     else:
         # Criterios activos compactos, sin crear un bloque visual pesado.
@@ -2284,7 +2461,7 @@ def render_busqueda_expedientes():
     st.markdown(f'<div class="ux-result-count">{len(work_u):,} expediente(s) encontrados</div>', unsafe_allow_html=True)
 
     if work_u.empty:
-        st.warning("No encontramos expedientes que cumplan todos los criterios indicados. Puede probar una denominación más amplia o aportar menos criterios.")
+        st.warning("No encontramos expedientes que cumplan todos los criterios indicados. Verifique la entidad y ubicación o pruebe una denominación más amplia.")
         return
 
     # Resumen compacto.
@@ -2324,27 +2501,59 @@ def render_busqueda_expedientes():
 
     st.markdown("### Resultados")
 
-    # Tabla escritorio + tarjetas móviles. Cada fila abre Trámite Transparente.
+    # Tabla de resultados: escritorio completa y móvil compacta.
+    # En móvil mantenemos una LISTA tabular (no tarjetas), reduciendo columnas
+    # para que siga siendo reconocible y fácil de recorrer con el dedo.
     rows = []
-    cards_html = []
+    mobile_rows = []
+
+    # Columnas esenciales para celular.
+    mobile_cols = [
+        cols_u.get("expediente"),
+        cols_u.get("entidad"),
+        cols_u.get("procedimiento"),
+        cols_u.get("departamento"),
+        cols_u.get("estado"),
+    ]
+    mobile_cols = [c for c in mobile_cols if c and c in display_u.columns]
+
     for _, row in display_u.iterrows():
         expediente = str(row.get(cols_u["expediente"], "")).strip()
         url = "https://tramitetransparente.sbn.gob.pe/#auto=" + expediente
         cells = []
-        pairs = []
+        mobile_cells = []
+
         for col in display_cols:
             val = row.get(col, "")
-            if pd.isna(val): val = ""
+            if pd.isna(val):
+                val = ""
             txt = escape(str(val))
             cells.append(f"<td>{txt}</td>")
-            pairs.append(f"<div class='ux-mrow'><span>{escape(str(col))}</span><b>{txt}</b></div>")
+
+        for col in mobile_cols:
+            val = row.get(col, "")
+            if pd.isna(val):
+                val = ""
+            txt = escape(str(val))
+            mobile_cells.append(f"<td class='ux-mobile-cell'>{txt}</td>")
+
+        safe_url = escape(url, quote=True)
         rows.append(
-            f"<tr class='ux-rrow' data-url='{escape(url, quote=True)}' onclick=\"window.open(this.dataset.url,'_blank')\">{''.join(cells)}</tr>"
+            f"<tr class='ux-rrow' data-url='{safe_url}' "
+            f"onclick=\"window.open(this.dataset.url,'_blank')\">"
+            f"{''.join(cells)}</tr>"
         )
-        cards_html.append(
-            f"<div class='ux-card' data-url='{escape(url, quote=True)}' onclick=\"window.open(this.dataset.url,'_blank')\">{''.join(pairs)}<div class='ux-open'>Abrir expediente ↗</div></div>"
+        mobile_rows.append(
+            f"<tr class='ux-mrow-table' data-url='{safe_url}' "
+            f"onclick=\"window.open(this.dataset.url,'_blank')\">"
+            f"{''.join(mobile_cells)}</tr>"
         )
+
     headers = ''.join(f"<th>{escape(str(c))}</th>" for c in display_cols)
+    mobile_headers = ''.join(
+        f"<th>{escape(str(c))}</th>" for c in mobile_cols
+    )
+
     html = f"""
     <style>
       .ux-tablewrap{{overflow-x:auto;max-height:68vh;width:100%}}
@@ -2353,17 +2562,48 @@ def render_busqueda_expedientes():
       .ux-table td{{padding:8px;border:1px solid #e1e4e7;color:#202428;white-space:nowrap}}
       .ux-rrow{{cursor:pointer}}
       .ux-rrow:hover td{{background:#e8f3fb}}
+
       .ux-mobile{{display:none}}
-      .ux-card{{background:#fff;border:1px solid #c9ced3;border-left:4px solid #1d70b8;border-radius:6px;margin:6px 0;padding:8px 9px;cursor:pointer}}
-      .ux-mrow{{display:grid;grid-template-columns:minmax(92px,38%) 1fr;gap:7px;padding:4px 0;border-bottom:1px solid #eef0f2;font-size:12px}}
-      .ux-mrow span{{color:#6b7277}}
-      .ux-mrow b{{color:#202428;word-break:break-word;font-weight:600}}
-      .ux-open{{margin-top:7px;text-align:right;color:#005ea8;font-weight:700;font-size:12px}}
-      @media(max-width:768px){{.ux-desktop{{display:none}}.ux-mobile{{display:block}}.ux-tablewrap{{max-height:none}}}}
+
+      /* Lista tabular compacta para teléfonos. */
+      .ux-mobile-tablewrap{{width:100%;overflow-x:hidden;background:#fff;border:1px solid #d9dde1;border-radius:5px}}
+      .ux-mobile-table{{width:100%;border-collapse:collapse;table-layout:fixed;font-size:10px;background:#fff}}
+      .ux-mobile-table th{{background:#f1f3f5;color:#505a5f;padding:7px 5px;border:1px solid #d9dde1;text-align:left;line-height:1.15}}
+      .ux-mobile-table td{{padding:7px 5px;border:1px solid #e1e4e7;color:#202428;vertical-align:top;line-height:1.25;word-break:break-word;overflow-wrap:anywhere}}
+      .ux-mrow-table{{cursor:pointer}}
+      .ux-mrow-table:active td{{background:#e8f3fb}}
+      .ux-mobile-table th:nth-child(1),.ux-mobile-table td:nth-child(1){{width:23%}}
+      .ux-mobile-table th:nth-child(2),.ux-mobile-table td:nth-child(2){{width:29%}}
+      .ux-mobile-table th:nth-child(3),.ux-mobile-table td:nth-child(3){{width:29%}}
+      .ux-mobile-table th:nth-child(4),.ux-mobile-table td:nth-child(4){{width:11%}}
+      .ux-mobile-table th:nth-child(5),.ux-mobile-table td:nth-child(5){{width:8%}}
+
+      @media(max-width:768px){{
+        .ux-desktop{{display:none}}
+        .ux-mobile{{display:block}}
+        .ux-tablewrap{{max-height:none}}
+      }}
     </style>
-    <div class='ux-desktop'><div class='ux-tablewrap'><table class='ux-table'><thead><tr>{headers}</tr></thead><tbody>{''.join(rows)}</tbody></table></div></div>
-    <div class='ux-mobile'>{''.join(cards_html)}</div>
+
+    <div class='ux-desktop'>
+      <div class='ux-tablewrap'>
+        <table class='ux-table'>
+          <thead><tr>{headers}</tr></thead>
+          <tbody>{''.join(rows)}</tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class='ux-mobile'>
+      <div class='ux-mobile-tablewrap'>
+        <table class='ux-mobile-table'>
+          <thead><tr>{mobile_headers}</tr></thead>
+          <tbody>{''.join(mobile_rows)}</tbody>
+        </table>
+      </div>
+    </div>
     """
+
     components.html(html, height=min(760, max(250, 85 + min(len(display_u), 18) * 34)), scrolling=False)
 
 
