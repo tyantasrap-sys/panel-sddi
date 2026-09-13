@@ -1335,8 +1335,8 @@ def parse_query(
     # antes de extraer años o marcos normativos, porque el año forma parte
     # del identificador del expediente.
     expediente_col = cols.get("expediente")
-    expediente_compacto = re.sub(r"\s+", "", normalize_text(p.raw))
-    if expediente_col and re.search(r"\d{1,8}-\d{2,4}/[A-Z0-9_-]+", expediente_compacto):
+    expediente_compacto = re.sub(r"\s+", "", str(p.raw).upper())
+    if expediente_col and re.fullmatch(r"\d{1,8}-\d{2,4}/[A-Z0-9_-]+", expediente_compacto):
         p.direct_expediente = True
         p.cleaned = p.raw
         p.mode = "expediente"
