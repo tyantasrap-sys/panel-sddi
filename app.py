@@ -1329,6 +1329,20 @@ def parse_query(
     p = ParsedQuery()
     p.raw = query.strip()
 
+    # BÚSQUEDA DIRECTA POR EXPEDIENTE: debe resolverse ANTES de extraer años.
+    # Un expediente como 150-2025/SBNSDDI contiene "2025", que el extractor
+    # de años puede interpretar como año de consulta y eliminar del texto.
+    # Ese orden provocaba que una búsqueda directa de expediente terminara en 0 resultados.
+    expediente_col = cols.get("expediente")
+    raw_norm = normalize_text(p.raw)
+    compact_raw = re.sub(r"\s+", "", raw_norm)
+    if expediente_col and re.search(r"\d{2,}[-/]\d{2,4}", compact_raw):
+        p.direct_expediente = True
+        p.cleaned = raw_norm
+        p.mode = "expediente"
+        p.interpretation.insert(0, ("Expediente", query.strip()))
+        return p
+
     work, normative_key = extract_normative(query)
     p.normative_key = normative_key
     if normative_key:
@@ -1343,19 +1357,6 @@ def parse_query(
         p.interpretation.append(("Situación", "Atendidos" if status == "ATENDIDOS" else "En trámite"))
     if y1 is not None:
         p.interpretation.append(("Periodo", str(y1) if y1 == y2 else f"{y1}–{y2}"))
-
-    # 1) Búsqueda directa por expediente.
-    expediente_col = cols.get("expediente")
-    if expediente_col and re.search(r"\d", work):
-        compact = re.sub(r"\s+", "", work)
-        if re.search(r"\d{2,}[-/]\d{2,4}", compact) or (
-            len(compact) <= 30 and re.search(r"\d", compact) and not p.year_explicit
-        ):
-            p.direct_expediente = True
-            p.cleaned = work
-            p.mode = "expediente"
-            p.interpretation.insert(0, ("Expediente", query.strip()))
-            return p
 
     # 2) Consulta de una sola palabra que pertenece a una familia de procedimiento.
     # Se evalúa ANTES de geografía porque algunas denominaciones de procedimiento
@@ -2587,7 +2588,10 @@ def render_busqueda_expedientes():
 
     for _, row in display_u.iterrows():
         expediente = str(row.get(cols_u["expediente"], "")).strip()
-        url = "https://tramitetransparente.sbn.gob.pe/#auto=" + expediente
+        safe_url = escape(
+            "https://tramitetransparente.sbn.gob.pe/#auto=" + quote(expediente, safe="")
+            , quote=True
+        )
         cells = []
         mobile_cells = []
 
@@ -2598,14 +2602,26 @@ def render_busqueda_expedientes():
             txt = escape(str(val))
             cells.append(f"<td>{txt}</td>")
 
-        for col in mobile_cols:
+        for idx, col in enumerate(mobile_cols):
             val = row.get(col, "")
             if pd.isna(val):
                 val = ""
             txt = escape(str(val))
-            mobile_cells.append(f"<td class='ux-mobile-cell'>{txt}</td>")
 
-        safe_url = escape(url, quote=True)
+            # En móvil el número de expediente es un enlace real (no depende
+            # de JavaScript). Al tocarlo abre una nueva pestaña y transporta
+            # el expediente mediante #auto= para que el parche de PC pueda
+            # actuar cuando corresponda.
+            if idx == 0 and expediente:
+                mobile_cells.append(
+                    f"<td class='ux-mobile-cell ux-exp-cell'>"
+                    f"<a class='ux-mobile-exp-link' target='_blank' "
+                    f"rel='noopener noreferrer' href='{safe_url}'>{txt}</a>"
+                    f"</td>"
+                )
+            else:
+                mobile_cells.append(f"<td class='ux-mobile-cell'>{txt}</td>")
+
         rows.append(
             f"<tr class='ux-rrow' data-url='{safe_url}' "
             f"onclick=\"window.open(this.dataset.url,'_blank')\">"
@@ -2635,12 +2651,15 @@ def render_busqueda_expedientes():
 
       /* Tabla móvil deslizable: conserva la lista, pero evita comprimir
          palabras y columnas hasta volverlas ilegibles. */
+      .ux-mobile-open-note{{font-size:11px;color:#667085;padding:0 0 6px 2px}}
       .ux-mobile-tablewrap{{width:100%;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;background:#fff;border:1px solid #d9dde1;border-radius:5px}}
       .ux-mobile-table{{width:max-content;min-width:720px;border-collapse:collapse;table-layout:fixed;font-size:11px;background:#fff}}
       .ux-mobile-table th{{background:#f1f3f5;color:#505a5f;padding:8px 7px;border:1px solid #d9dde1;text-align:left;line-height:1.15;white-space:nowrap;position:sticky;top:0;z-index:1}}
       .ux-mobile-table td{{padding:8px 7px;border:1px solid #e1e4e7;color:#202428;vertical-align:top;line-height:1.3;white-space:nowrap}}
       .ux-mrow-table{{cursor:pointer}}
       .ux-mrow-table:active td{{background:#e8f3fb}}
+      .ux-mobile-exp-link{{display:inline-block;color:#146eb4;font-weight:600;text-decoration:underline;text-underline-offset:2px;white-space:nowrap}}
+      .ux-mobile-exp-link:active{{opacity:.7}}
       .ux-mobile-table th:nth-child(1),.ux-mobile-table td:nth-child(1){{width:150px}}
       .ux-mobile-table th:nth-child(2),.ux-mobile-table td:nth-child(2){{width:270px}}
       .ux-mobile-table th:nth-child(3),.ux-mobile-table td:nth-child(3){{width:360px}}
@@ -2667,6 +2686,7 @@ def render_busqueda_expedientes():
     </div>
 
     <div class='ux-mobile'>
+      <div class='ux-mobile-open-note'>Toca el número de expediente para abrirlo en una nueva pestaña.</div>
       <div class='ux-mobile-tablewrap'>
         <table class='ux-mobile-table'>
           <thead><tr>{mobile_headers}</tr></thead>
