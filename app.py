@@ -1329,16 +1329,16 @@ def parse_query(
     p = ParsedQuery()
     p.raw = query.strip()
 
-    # BÚSQUEDA DIRECTA POR EXPEDIENTE: debe resolverse ANTES de extraer años.
-    # Un expediente como 150-2025/SBNSDDI contiene "2025", que el extractor
-    # de años puede interpretar como año de consulta y eliminar del texto.
-    # Ese orden provocaba que una búsqueda directa de expediente terminara en 0 resultados.
+    # EXPEDIENTE: si la consulta presenta la estructura institucional
+    # numero-año/codigo (por ejemplo 150-2025/SBNSDDI), se reconoce
+    # inmediatamente como expediente de la columna A. Esto debe ocurrir
+    # antes de extraer años o marcos normativos, porque el año forma parte
+    # del identificador del expediente.
     expediente_col = cols.get("expediente")
-    raw_norm = normalize_text(p.raw)
-    compact_raw = re.sub(r"\s+", "", raw_norm)
-    if expediente_col and re.search(r"\d{2,}[-/]\d{2,4}", compact_raw):
+    expediente_compacto = re.sub(r"\s+", "", normalize_text(p.raw))
+    if expediente_col and re.search(r"\d{1,8}-\d{2,4}/[A-Z0-9_-]+", expediente_compacto):
         p.direct_expediente = True
-        p.cleaned = raw_norm
+        p.cleaned = p.raw
         p.mode = "expediente"
         p.interpretation.insert(0, ("Expediente", query.strip()))
         return p
@@ -1357,6 +1357,18 @@ def parse_query(
         p.interpretation.append(("Situación", "Atendidos" if status == "ATENDIDOS" else "En trámite"))
     if y1 is not None:
         p.interpretation.append(("Periodo", str(y1) if y1 == y2 else f"{y1}–{y2}"))
+
+    # 1) Búsqueda directa por expediente para formatos numéricos alternativos.
+    if expediente_col and re.search(r"\d", work):
+        compact = re.sub(r"\s+", "", work)
+        if re.search(r"\d{2,}[-/]\d{2,4}", compact) or (
+            len(compact) <= 30 and re.search(r"\d", compact) and not p.year_explicit
+        ):
+            p.direct_expediente = True
+            p.cleaned = work
+            p.mode = "expediente"
+            p.interpretation.insert(0, ("Expediente", query.strip()))
+            return p
 
     # 2) Consulta de una sola palabra que pertenece a una familia de procedimiento.
     # Se evalúa ANTES de geografía porque algunas denominaciones de procedimiento
@@ -2588,10 +2600,7 @@ def render_busqueda_expedientes():
 
     for _, row in display_u.iterrows():
         expediente = str(row.get(cols_u["expediente"], "")).strip()
-        safe_url = escape(
-            "https://tramitetransparente.sbn.gob.pe/#auto=" + quote(expediente, safe="")
-            , quote=True
-        )
+        url = "https://tramitetransparente.sbn.gob.pe/#auto=" + expediente
         cells = []
         mobile_cells = []
 
@@ -2622,6 +2631,10 @@ def render_busqueda_expedientes():
             else:
                 mobile_cells.append(f"<td class='ux-mobile-cell'>{txt}</td>")
 
+        safe_url = escape(
+            "https://tramitetransparente.sbn.gob.pe/#auto=" + quote(expediente, safe="")
+            , quote=True
+        )
         rows.append(
             f"<tr class='ux-rrow' data-url='{safe_url}' "
             f"onclick=\"window.open(this.dataset.url,'_blank')\">"
