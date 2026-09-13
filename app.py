@@ -978,6 +978,18 @@ def extract_status(text: str) -> Tuple[str, str]:
     return work, ""
 
 
+
+# Alias de búsqueda: términos que el usuario puede usar aunque el histórico
+# utilice una denominación administrativa distinta.
+GEOGRAPHIC_QUERY_ALIASES = {
+    "CHOSICA": ["CHOSICA", "LURIGANCHO", "LURIGANCHO-CHOSICA", "LURIGANCHO CHOSICA"],
+}
+
+def geographic_search_terms(value: str) -> List[str]:
+    key = normalize_text(value)
+    return GEOGRAPHIC_QUERY_ALIASES.get(key, [value])
+
+
 def find_geo_phrase(query: str, geo_values: List[str]) -> Tuple[str, str]:
     """Devuelve (texto_geografico, query_sin_geografia), priorizando coincidencias largas."""
     q = normalize_text(query)
@@ -995,6 +1007,14 @@ def find_geo_phrase(query: str, geo_values: List[str]) -> Tuple[str, str]:
         if re.search(rf"\b{re.escape(norm_geo)}\b", q):
             cleaned = re.sub(rf"\b{re.escape(norm_geo)}\b", " ", q, count=1)
             return original, re.sub(r"\s+", " ", cleaned).strip()
+
+    # Alias geográficos conocidos, aunque el valor coloquial no aparezca
+    # literalmente en la base histórica.
+    for alias, equivalents in GEOGRAPHIC_QUERY_ALIASES.items():
+        alias_norm = normalize_text(alias)
+        if re.search(rf"\b{re.escape(alias_norm)}\b", q):
+            cleaned = re.sub(rf"\b{re.escape(alias_norm)}\b", " ", q, count=1)
+            return alias, re.sub(r"\s+", " ", cleaned).strip()
 
     # Frase posterior a EN.
     m = re.search(r"\bEN\s+(.+)$", q)
@@ -1145,6 +1165,67 @@ def find_procedure_candidate(query: str, procedure_index: pd.DataFrame) -> Tuple
 def has_entity_cue(text: str) -> bool:
     tokens = set(normalize_search_phrase(text).split())
     return bool(tokens & {singularize_token(x) for x in ENTITY_CUES})
+
+
+
+def entity_component_mask(
+    df: pd.DataFrame,
+    entity_col: Optional[str],
+    text: str,
+) -> Tuple[pd.Series, float]:
+    """
+    Busca una entidad por componentes significativos, no por frase completa.
+
+    Ej.: "GOBIERNO REGIONAL" puede coincidir con:
+      GOBIERNO REGIONAL DE AREQUIPA
+      GOBIERNO REGIONAL DE LORETO
+      GOBIERNO REGIONAL DEL...
+    """
+    empty = pd.Series(False, index=df.index)
+    if not entity_col or entity_col not in df.columns:
+        return empty, 0.0
+
+    q = normalize_search_phrase(text)
+    if not q:
+        return empty, 0.0
+
+    stop = {"DE", "DEL", "LA", "EL", "LOS", "LAS", "Y", "EN", "POR", "PARA"}
+    tokens = [
+        singularize_token(t)
+        for t in q.split()
+        if len(t) >= 3 and singularize_token(t) not in stop
+    ]
+    if not tokens:
+        return empty, 0.0
+
+    norm = df[entity_col].astype(str).map(normalize_text)
+    mask = pd.Series(True, index=df.index)
+
+    for token in tokens:
+        token_re = rf"(?<![A-Z0-9]){re.escape(token)}(?![A-Z0-9])"
+        mask &= norm.str.contains(token_re, regex=True, na=False)
+
+    if mask.any():
+        return mask, 97.0 if len(tokens) > 1 else 95.0
+
+    # Fallback tolerante para pequeñas variaciones históricas en la entidad.
+    # La tolerancia se aplica por token, no a la fila completa.
+    candidates = []
+    unique_entities = unique_clean_values(df, entity_col)
+    for value in unique_entities[:3000]:
+        n = normalize_text(value)
+        hits = 0
+        for token in tokens:
+            if re.search(rf"(?<![A-Z0-9]){re.escape(token)}(?![A-Z0-9])", n):
+                hits += 1
+        if hits == len(tokens):
+            candidates.append(value)
+
+    if candidates:
+        valid = {normalize_text(v) for v in candidates}
+        return norm.isin(valid), 92.0
+
+    return empty, 0.0
 
 
 def choose_field_intent(
@@ -1380,6 +1461,21 @@ def parse_query(
     # 8) Residuo + ubicación, por ejemplo "municipalidades de Piura" o
     # "gobierno regional de Arequipa".
     if p.location_text and residual:
+        # Cuando el residuo contiene una señal institucional clara, la
+        # interpretación de entidad tiene prioridad. Esto evita que una
+        # coincidencia accidental con un procedimiento como "GOBIERNO REGIONAL"
+        # bloquee la entidad real.
+        if has_entity_cue(residual) and cols.get("entidad"):
+            entity_mask, entity_score = entity_component_mask(
+                df, cols.get("entidad"), residual
+            )
+            if entity_mask.any() and entity_score >= 90:
+                p.entity_text = residual
+                p.interpretation.append(("Entidad / administrado", residual.title()))
+                p.mode = "compuesta"
+                p.cleaned = ""
+                return p
+
         kind, value, score, ambiguity = choose_field_intent(df, residual, cols, allow_ambiguity=True)
         if kind == "procedimiento":
             p.procedure_text = value
@@ -1459,8 +1555,17 @@ def apply_parsed_query(df: pd.DataFrame, p: ParsedQuery, cols: Dict[str, Optiona
         mask = pd.Series(True, index=work.index)
 
         if p.entity_text and cols.get("entidad"):
-            # La entidad se trata con tolerancia dentro del campo D, pero como condición AND.
-            entity_mask, _ = exact_or_fuzzy_field_mask(work, cols["entidad"], p.entity_text, min_score=70)
+            # Para consultas compuestas (especialmente entidad + ubicación),
+            # buscar por componentes evita exigir que toda la frase coincida
+            # literalmente con la denominación histórica.
+            if p.location_text and has_entity_cue(p.entity_text):
+                entity_mask, _ = entity_component_mask(
+                    work, cols["entidad"], p.entity_text
+                )
+            else:
+                entity_mask, _ = exact_or_fuzzy_field_mask(
+                    work, cols["entidad"], p.entity_text, min_score=70
+                )
             mask &= entity_mask
 
         if p.procedure_text and cols.get("procedimiento"):
@@ -1505,10 +1610,21 @@ def apply_parsed_query(df: pd.DataFrame, p: ParsedQuery, cols: Dict[str, Optiona
 
         if p.location_text:
             geo_mask = pd.Series(False, index=work.index)
+            geo_terms = geographic_search_terms(p.location_text)
+
             for key in ("departamento", "provincia", "distrito"):
                 col = cols.get(key)
                 if col:
-                    geo_mask |= mask_contains(work[col], p.location_text)
+                    col_series = work[col].astype(str).map(normalize_text)
+                    for term in geo_terms:
+                        term_n = normalize_text(term)
+                        if term_n:
+                            geo_mask |= col_series.str.contains(
+                                rf"(?<![A-Z0-9]){re.escape(term_n)}(?![A-Z0-9])",
+                                regex=True,
+                                na=False,
+                            )
+
             # Ubicación es obligatoria cuando fue interpretada.
             mask &= geo_mask
 
@@ -2124,73 +2240,6 @@ def render_busqueda_expedientes():
             '<div class="ux-section-note">Los filtros aparecerán aquí después de realizar una búsqueda.</div>',
             unsafe_allow_html=True,
         )
-
-        # -------------------------------------------------------------
-        # Corrección quirúrgica para consultas "entidad + ubicación".
-        #
-        # Ejemplos:
-        #   Gobierno Regional Loreto
-        #   Municipalidad Chosica
-        #
-        # Solo se activa si podemos reconocer la ubicación y una expresión
-        # de entidad. Las demás consultas continúan por el motor original.
-        # -------------------------------------------------------------
-        try:
-            entity_col_u = cols_u.get("entidad")
-            geo_cols_u = [
-                cols_u.get("departamento"),
-                cols_u.get("provincia"),
-                cols_u.get("distrito"),
-            ]
-
-            known_geo_values = set()
-            for geo_col in geo_cols_u:
-                if geo_col and geo_col in base_u.columns:
-                    known_geo_values.update(
-                        str(v).strip()
-                        for v in base_u[geo_col].dropna().unique()
-                        if str(v).strip()
-                    )
-
-            raw_query_u = str(st.session_state.get(f"{prefix}query", "")).strip()
-            entity_tokens_u, location_tokens_u = split_entity_location_phrase(
-                raw_query_u, known_geo_values
-            )
-
-            if entity_tokens_u and location_tokens_u and entity_col_u:
-                entity_text_u = " ".join(entity_tokens_u)
-
-                # Evitamos exigir coincidencia literal de la frase completa:
-                # cada concepto relevante de la entidad debe estar presente.
-                entity_terms_u = [
-                    t for t in entity_tokens_u
-                    if normalize_text(t) not in {"de", "del", "la", "el", "los", "las"}
-                ]
-
-                # Solo intervenir para consultas con estructura de entidad.
-                if looks_like_entity_phrase(entity_tokens_u) and entity_terms_u:
-                    compound_u = apply_compound_entity_location(
-                        base_u,
-                        entity_col_u,
-                        geo_cols_u,
-                        entity_terms_u,
-                        location_tokens_u,
-                    )
-
-                    # Si la consulta compuesta tiene coincidencias reales,
-                    # usamos ese conjunto como universo de trabajo. Si no,
-                    # dejamos intacto el comportamiento original.
-                    if not compound_u.empty:
-                        work_u = compound_u.copy()
-                        st.session_state[f"{prefix}compound_interpretation"] = (
-                            entity_text_u,
-                            location_tokens_u[0],
-                        )
-                    else:
-                        st.session_state[f"{prefix}compound_interpretation"] = None
-        except Exception:
-            # Nunca dejar que una mejora auxiliar rompa el buscador principal.
-            st.session_state[f"{prefix}compound_interpretation"] = None
 
         work_u = base_u.copy()
     else:
