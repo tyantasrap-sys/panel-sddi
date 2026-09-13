@@ -2611,6 +2611,11 @@ def render_busqueda_expedientes():
             txt = escape(str(val))
             cells.append(f"<td>{txt}</td>")
 
+        safe_url = escape(
+            "https://tramitetransparente.sbn.gob.pe/#auto=" + quote(expediente, safe=""),
+            quote=True,
+        )
+
         for idx, col in enumerate(mobile_cols):
             val = row.get(col, "")
             if pd.isna(val):
@@ -2631,10 +2636,6 @@ def render_busqueda_expedientes():
             else:
                 mobile_cells.append(f"<td class='ux-mobile-cell'>{txt}</td>")
 
-        safe_url = escape(
-            "https://tramitetransparente.sbn.gob.pe/#auto=" + quote(expediente, safe="")
-            , quote=True
-        )
         rows.append(
             f"<tr class='ux-rrow' data-url='{safe_url}' "
             f"onclick=\"window.open(this.dataset.url,'_blank')\">"
