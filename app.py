@@ -1888,6 +1888,32 @@ def render_busqueda_expedientes():
       .ux-result-count {background:#fff;border-left:4px solid #1d70b8;padding:9px 12px;font-weight:800;margin:9px 0}
       .ux-section-note {font-size:11px;color:#667085;margin:1px 0 3px 0}
       .ux-download {margin:4px 0 6px 0}
+
+    input[aria-label="modal_trigger"] {
+        display: none !important;
+        visibility: hidden !important;
+        height: 0 !important;
+        min-height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+    div[data-testid="stTextInput"]:has(input[aria-label="modal_trigger"]) {
+        display: none !important;
+    }
+
+
+      .ux-section-note{font-size:11px;color:#667085;margin:5px 0 3px 0}
+      [data-testid="stExpander"] details summary {
+        font-weight: 700 !important;
+      }
+      @media(max-width:768px){
+        [data-testid="stExpander"] details summary {
+          font-size: 13px !important;
+          padding-top: 8px !important;
+          padding-bottom: 8px !important;
+        }
+      }
+
       @media(max-width:768px){
         .ux-title{font-size:18px}
         .ux-hint{font-size:11px}
@@ -1961,104 +1987,279 @@ def render_busqueda_expedientes():
 
         base_u = apply_parsed_query(base_u, parsed_u, cols_u, entity_index_u)
 
-    # Filtros compactos en línea en lugar de sidebar; así no interfieren con la UI original
-    # y se comportan bien en celular (Streamlit apila las columnas automáticamente).
-    st.markdown('<div class="ux-section-note"><b>Situación y refinamiento</b></div>', unsafe_allow_html=True)
-    row1 = st.columns(4)
-
-    with row1[0]:
-        sit_options = ["Todas", "Atendidos", "En trámite"]
-        situation_u = st.radio(
-            "Situación",
-            sit_options,
-            index=sit_options.index(st.session_state.get(f"{prefix}situation", "Todas")),
-            horizontal=True,
-            key=f"{prefix}situation_widget_{st.session_state[f'{prefix}filter_version']}",
+    # ------------------------------------------------------------------
+    # UX: búsqueda primero; refinamiento progresivo después.
+    # Los filtros no aparecen hasta que exista una búsqueda ejecutada.
+    # ------------------------------------------------------------------
+    if not st.session_state.get(f"{prefix}searched", False):
+        st.markdown(
+            '<div class="ux-section-note">Los filtros aparecerán aquí después de realizar una búsqueda.</div>',
+            unsafe_allow_html=True,
         )
-        st.session_state[f"{prefix}situation"] = situation_u
-
-    # Marco normativo solo aparece si el universo consultado realmente contiene >=2 marcos.
-    detected_norms = []
-    norm_col = cols_u.get("marco_normativo")
-    if norm_col and len(base_u):
-        ns = base_u[norm_col].astype(str).map(normalize_text)
-        if ns.str.contains("1192", regex=False, na=False).any(): detected_norms.append("DL 1192")
-        if ns.str.contains("30556", regex=False, na=False).any(): detected_norms.append("Ley 30556")
-        if ns.str.contains("29151", regex=False, na=False).any(): detected_norms.append("Ley 29151")
-
-    normative_u = "Todos"
-    with row1[1]:
-        if len(detected_norms) >= 2:
-            options_n = ["Todos"] + detected_norms
-            current = st.session_state.get(f"{prefix}normative", "Todos")
-            if current not in options_n: current = "Todos"
-            normative_u = st.radio(
-                "Marco normativo",
-                options_n,
-                index=options_n.index(current),
-                horizontal=True,
-                key=f"{prefix}normative_widget_{st.session_state[f'{prefix}filter_version']}",
-            )
-        else:
-            st.markdown("<div style='font-size:11px;color:#667085;padding-top:1.45rem;'>Marco normativo: no requiere segmentación</div>", unsafe_allow_html=True)
-        st.session_state[f"{prefix}normative"] = normative_u
-
-    # El resto de columnas son selectores compactos; se construyen según el universo actual.
-    work_u = base_u.copy()
-    if situation_u != "Todas":
-        work_u = work_u[status_group_mask(work_u, cols_u.get("estado"), "ATENDIDOS" if situation_u == "Atendidos" else "EN TRAMITE")]
-    if normative_u != "Todos" and norm_col:
-        number = {"DL 1192":"1192", "Ley 30556":"30556", "Ley 29151":"29151"}[normative_u]
-        work_u = work_u[work_u[norm_col].astype(str).map(normalize_text).str.contains(number, regex=False, na=False)]
-
-    for idx, (key, label) in enumerate([
-        ("departamento", "Departamento"),
-        ("provincia", "Provincia"),
-        ("distrito", "Distrito"),
-    ], start=2):
-        if idx >= 4: break
-        col = cols_u.get(key)
-        with row1[idx]:
-            if col:
-                values = ["Todos"] + sorted(unique_clean_values(work_u, col))
-                sel = st.selectbox(label, values, key=f"{prefix}{key}_{st.session_state[f'{prefix}filter_version']}")
-                st.session_state[f"{prefix}{key}"] = sel
-                if sel != "Todos": work_u = work_u[work_u[col].astype(str).str.strip() == sel]
-
-    # Segunda fila: entidad, estado original, año.
-    row2 = st.columns(3)
-    mostrar_entidad = not (parsed_u and parsed_u.entity_text)
-    if mostrar_entidad:
-        with row2[0]:
-            ent_col = cols_u.get("entidad")
-            values = ["Todas"] + sorted(unique_clean_values(work_u, ent_col))[:500]
-            ent_sel = st.selectbox("Administrado / entidad", values, key=f"{prefix}entidad_{st.session_state[f'{prefix}filter_version']}")
-            st.session_state[f"{prefix}entidad"] = ent_sel
-            if ent_sel != "Todas": work_u = work_u[work_u[ent_col].astype(str).str.strip() == ent_sel]
+        work_u = base_u.copy()
     else:
-        row2[0].markdown("<div style='font-size:11px;color:#667085;padding-top:1.45rem;'>Administrado/entidad ya forma parte de la consulta</div>", unsafe_allow_html=True)
+        # Criterios activos compactos, sin crear un bloque visual pesado.
+        if parsed_u and getattr(parsed_u, "interpretation", None):
+            chips = []
+            for field, value in parsed_u.interpretation[:6]:
+                chips.append(
+                    f"<span style='display:inline-block;background:#EAF4FB;border:1px solid #C5DFF2;"
+                    f"border-radius:14px;padding:3px 8px;margin:2px 4px 2px 0;font-size:10px;"
+                    f"color:#205A82;'>{escape(str(field))}: {escape(str(value))}</span>"
+                )
+            if chips:
+                st.markdown(
+                    "<div style='margin:2px 0 8px 0;'>" + "".join(chips) + "</div>",
+                    unsafe_allow_html=True,
+                )
 
-    if cols_u.get("estado"):
-        with row2[1]:
-            estados = ["Todos"] + sorted(unique_clean_values(work_u, cols_u["estado"]))
-            state_sel = st.selectbox("Estado original", estados, key=f"{prefix}state_{st.session_state[f'{prefix}filter_version']}")
-            st.session_state[f"{prefix}state"] = state_sel
-            if state_sel != "Todos": work_u = work_u[work_u[cols_u["estado"]].astype(str).str.strip() == state_sel]
+        # Aplicamos primero los filtros rápidos.
+        sit_options = ["Todas", "Atendidos", "En trámite"]
+        situation_current = st.session_state.get(f"{prefix}situation", "Todas")
+        if situation_current not in sit_options:
+            situation_current = "Todas"
 
-    if cols_u.get("anio"):
-        years = pd.to_numeric(work_u[cols_u["anio"]].astype(str).str.extract(r"((?:19|20)\d{2})")[0], errors="coerce")
-        available = sorted(years.dropna().astype(int).unique().tolist())
-        with row2[2]:
-            if len(available) >= 2:
-                start = parsed_u.year_min if parsed_u and parsed_u.year_min in available else min(available)
-                end = parsed_u.year_max if parsed_u and parsed_u.year_max in available else max(available)
-                start = max(min(available), start); end = min(max(available), end)
-                if start > end: start, end = min(available), max(available)
-                year_sel = st.slider("Año", min_value=min(available), max_value=max(available), value=(start, end), step=1, key=f"{prefix}year_{st.session_state[f'{prefix}filter_version']}")
-                years_now = pd.to_numeric(work_u[cols_u["anio"]].astype(str).str.extract(r"((?:19|20)\d{2})")[0], errors="coerce")
-                work_u = work_u[years_now.between(year_sel[0], year_sel[1], inclusive="both").fillna(False)]
-            elif len(available) == 1:
-                st.markdown(f"<div style='font-size:11px;color:#667085;padding-top:1.45rem;'>Año disponible: <b>{available[0]}</b></div>", unsafe_allow_html=True)
+        # Detectar marcos presentes dentro del universo de la consulta.
+        detected_norms = []
+        norm_col = cols_u.get("marco_normativo")
+        if norm_col and len(base_u):
+            ns = base_u[norm_col].astype(str).map(normalize_text)
+            if ns.str.contains("1192", regex=False, na=False).any():
+                detected_norms.append("DL 1192")
+            if ns.str.contains("30556", regex=False, na=False).any():
+                detected_norms.append("Ley 30556")
+            if ns.str.contains("29151", regex=False, na=False).any():
+                detected_norms.append("Ley 29151")
+
+        normative_current = st.session_state.get(f"{prefix}normative", "Todos")
+        if normative_current not in (["Todos"] + detected_norms):
+            normative_current = "Todos"
+
+        # Primera línea: situación y, solo cuando corresponda, marco normativo.
+        quick_cols = st.columns([1.0, 1.25] if len(detected_norms) >= 2 else [1.0, 1.0])
+        with quick_cols[0]:
+            situation_u = st.radio(
+                "Situación",
+                sit_options,
+                index=sit_options.index(situation_current),
+                horizontal=True,
+                key=f"{prefix}situation_widget_{st.session_state[f'{prefix}filter_version']}",
+            )
+            st.session_state[f"{prefix}situation"] = situation_u
+
+        normative_u = "Todos"
+        with quick_cols[1]:
+            if len(detected_norms) >= 2:
+                options_n = ["Todos"] + detected_norms
+                normative_u = st.radio(
+                    "Marco normativo",
+                    options_n,
+                    index=options_n.index(normative_current),
+                    horizontal=True,
+                    key=f"{prefix}normative_widget_{st.session_state[f'{prefix}filter_version']}",
+                )
+            else:
+                st.markdown(
+                    "<div style='font-size:11px;color:#667085;padding-top:1.65rem;'>"
+                    "Marco normativo: sin segmentación disponible</div>",
+                    unsafe_allow_html=True,
+                )
+            st.session_state[f"{prefix}normative"] = normative_u
+
+        work_u = base_u.copy()
+
+        if situation_u != "Todas":
+            work_u = work_u[
+                status_group_mask(
+                    work_u,
+                    cols_u.get("estado"),
+                    "ATENDIDOS" if situation_u == "Atendidos" else "EN TRAMITE",
+                )
+            ]
+
+        if normative_u != "Todos" and norm_col:
+            number = {
+                "DL 1192": "1192",
+                "Ley 30556": "30556",
+                "Ley 29151": "29151",
+            }[normative_u]
+            work_u = work_u[
+                work_u[norm_col]
+                .astype(str)
+                .map(normalize_text)
+                .str.contains(number, regex=False, na=False)
+            ]
+
+        # Refinamiento avanzado en un acordeón: no invade la pantalla principal.
+        with st.expander("⚙️ Refinar búsqueda", expanded=False):
+            st.markdown(
+                "<div style='font-size:10px;color:#667085;margin-bottom:6px;'>"
+                "Ajusta los resultados sin modificar la consulta principal.</div>",
+                unsafe_allow_html=True,
+            )
+
+            adv1 = st.columns(3)
+
+            # Ubicación
+            with adv1[0]:
+                dep_col = cols_u.get("departamento")
+                if dep_col:
+                    values = ["Todos"] + sorted(unique_clean_values(work_u, dep_col))
+                    current_dep = st.session_state.get(f"{prefix}dep", "Todos")
+                    if current_dep not in values:
+                        current_dep = "Todos"
+                    dep_sel = st.selectbox(
+                        "Departamento",
+                        values,
+                        index=values.index(current_dep),
+                        key=f"{prefix}dep_{st.session_state[f'{prefix}filter_version']}",
+                    )
+                    st.session_state[f"{prefix}dep"] = dep_sel
+                    if dep_sel != "Todos":
+                        work_u = work_u[
+                            work_u[dep_col].astype(str).str.strip() == dep_sel
+                        ]
+
+            with adv1[1]:
+                prov_col = cols_u.get("provincia")
+                if prov_col:
+                    values = ["Todos"] + sorted(unique_clean_values(work_u, prov_col))
+                    current_prov = st.session_state.get(f"{prefix}prov", "Todos")
+                    if current_prov not in values:
+                        current_prov = "Todos"
+                    prov_sel = st.selectbox(
+                        "Provincia",
+                        values,
+                        index=values.index(current_prov),
+                        key=f"{prefix}prov_{st.session_state[f'{prefix}filter_version']}",
+                    )
+                    st.session_state[f"{prefix}prov"] = prov_sel
+                    if prov_sel != "Todos":
+                        work_u = work_u[
+                            work_u[prov_col].astype(str).str.strip() == prov_sel
+                        ]
+
+            with adv1[2]:
+                dist_col = cols_u.get("distrito")
+                if dist_col:
+                    values = ["Todos"] + sorted(unique_clean_values(work_u, dist_col))
+                    current_dist = st.session_state.get(f"{prefix}dist", "Todos")
+                    if current_dist not in values:
+                        current_dist = "Todos"
+                    dist_sel = st.selectbox(
+                        "Distrito",
+                        values,
+                        index=values.index(current_dist),
+                        key=f"{prefix}dist_{st.session_state[f'{prefix}filter_version']}",
+                    )
+                    st.session_state[f"{prefix}dist"] = dist_sel
+                    if dist_sel != "Todos":
+                        work_u = work_u[
+                            work_u[dist_col].astype(str).str.strip() == dist_sel
+                        ]
+
+            adv2 = st.columns(3)
+
+            # Administrado / entidad solo si NO formó parte de la consulta.
+            mostrar_entidad = not (parsed_u and parsed_u.entity_text)
+            with adv2[0]:
+                ent_col = cols_u.get("entidad")
+                if mostrar_entidad and ent_col:
+                    values = ["Todas"] + sorted(unique_clean_values(work_u, ent_col))[:500]
+                    current_ent = st.session_state.get(f"{prefix}entidad", "Todas")
+                    if current_ent not in values:
+                        current_ent = "Todas"
+                    ent_sel = st.selectbox(
+                        "Administrado / entidad",
+                        values,
+                        index=values.index(current_ent),
+                        key=f"{prefix}entidad_{st.session_state[f'{prefix}filter_version']}",
+                    )
+                    st.session_state[f"{prefix}entidad"] = ent_sel
+                    if ent_sel != "Todas":
+                        work_u = work_u[
+                            work_u[ent_col].astype(str).str.strip() == ent_sel
+                        ]
+                else:
+                    st.markdown(
+                        "<div style='font-size:11px;color:#667085;padding-top:1.55rem;'>"
+                        "Administrado / entidad ya forma parte de la consulta</div>",
+                        unsafe_allow_html=True,
+                    )
+
+            with adv2[1]:
+                estado_col = cols_u.get("estado")
+                if estado_col:
+                    estados = ["Todos"] + sorted(unique_clean_values(work_u, estado_col))
+                    current_state = st.session_state.get(f"{prefix}state", "Todos")
+                    if current_state not in estados:
+                        current_state = "Todos"
+                    state_sel = st.selectbox(
+                        "Estado original",
+                        estados,
+                        index=estados.index(current_state),
+                        key=f"{prefix}state_{st.session_state[f'{prefix}filter_version']}",
+                    )
+                    st.session_state[f"{prefix}state"] = state_sel
+                    if state_sel != "Todos":
+                        work_u = work_u[
+                            work_u[estado_col].astype(str).str.strip() == state_sel
+                        ]
+
+            with adv2[2]:
+                anio_col = cols_u.get("anio")
+                if anio_col:
+                    years = pd.to_numeric(
+                        work_u[anio_col]
+                        .astype(str)
+                        .str.extract(r"((?:19|20)\d{2})")[0],
+                        errors="coerce",
+                    )
+                    available = sorted(years.dropna().astype(int).unique().tolist())
+                    if len(available) >= 2:
+                        start = (
+                            parsed_u.year_min
+                            if parsed_u and parsed_u.year_min in available
+                            else min(available)
+                        )
+                        end = (
+                            parsed_u.year_max
+                            if parsed_u and parsed_u.year_max in available
+                            else max(available)
+                        )
+                        start = max(min(available), start)
+                        end = min(max(available), end)
+                        if start > end:
+                            start, end = min(available), max(available)
+
+                        year_sel = st.slider(
+                            "Año",
+                            min_value=min(available),
+                            max_value=max(available),
+                            value=(start, end),
+                            step=1,
+                            key=f"{prefix}year_{st.session_state[f'{prefix}filter_version']}",
+                        )
+                        years_now = pd.to_numeric(
+                            work_u[anio_col]
+                            .astype(str)
+                            .str.extract(r"((?:19|20)\d{2})")[0],
+                            errors="coerce",
+                        )
+                        work_u = work_u[
+                            years_now.between(
+                                year_sel[0], year_sel[1], inclusive="both"
+                            ).fillna(False)
+                        ]
+                    elif len(available) == 1:
+                        st.markdown(
+                            f"<div style='font-size:11px;color:#667085;padding-top:1.55rem;'>"
+                            f"Año disponible: <b>{available[0]}</b></div>",
+                            unsafe_allow_html=True,
+                        )
+    # ------------------------------------------------------------------
+    # Fin del refinamiento progresivo
+    # ------------------------------------------------------------------
 
     # Mostrar resultados.
     st.markdown(f'<div class="ux-result-count">{len(work_u):,} expediente(s) encontrados</div>', unsafe_allow_html=True)
