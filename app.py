@@ -1414,6 +1414,25 @@ def parse_query(
                 p.cleaned = ""
                 return p
 
+    # 5) ENTIDAD + UBICACIÓN: resolver esta combinación ANTES de consultar
+    # el catálogo de procedimientos. Esta es la regla crítica para:
+    #   - "gobierno regional arequipa"
+    #   - "gobierno regional loreto"
+    #   - "municipalidad chosica"
+    #
+    # Antes el parser podía tomar "GOBIERNO REGIONAL" como procedimiento y
+    # retornar prematuramente, impidiendo que el campo D se evaluara.
+    if p.location_text and residual and has_entity_cue(residual) and cols.get("entidad"):
+        entity_mask, entity_score = entity_component_mask(
+            df, cols.get("entidad"), residual
+        )
+        if entity_mask.any() and entity_score >= 90:
+            p.entity_text = residual
+            p.interpretation.append(("Entidad / administrado", residual.title()))
+            p.mode = "compuesta"
+            p.cleaned = ""
+            return p
+
     # 5) Si la consulta contiene una señal fuerte de entidad (por ejemplo,
     # "empresa", "municipalidad", "gobierno", "sociedad"), damos prioridad
     # a la entidad completa antes de interpretar una palabra interna como procedimiento.
