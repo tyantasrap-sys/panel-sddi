@@ -268,7 +268,17 @@ st.markdown("""
 html, body, [class*="css"], .stApp { font-family: 'Inter', sans-serif !important; background-color: #F4F7F6 !important; }
 .block-container { padding-top: 2rem !important; padding-bottom: 2rem !important; }
 
-div[data-testid="stTextInput"] { display: none !important; visibility: hidden !important; height: 0 !important; overflow: hidden !important; margin: 0 !important; padding: 0 !important; }
+/* Solo ocultar el input técnico usado por los modales de Gestión.
+   No ocultar los campos de búsqueda de las otras pestañas. */
+div[data-testid="stTextInput"]:has(input[aria-label="modal_trigger"]) {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
 
 button[kind="primary"] { background-color: #2980B9 !important; border-color: #2980B9 !important; color: white !important; font-weight: 700 !important; }
 button[kind="primary"]:hover { background-color: #1A5276 !important; border-color: #1A5276 !important; }
@@ -1881,6 +1891,17 @@ def render_busqueda_expedientes():
     st.markdown("""
     <style>
       .ux-title {font-size:22px;font-weight:800;color:#1a252f;margin:3px 0 2px 0}
+      /* Caja principal de búsqueda */
+      div[data-testid="stTextInput"]:not(:has(input[aria-label="modal_trigger"])) input {
+        background:#FFFFFF !important;
+        color:#1A252F !important;
+        border:1px solid #AEB6BF !important;
+        min-height:42px !important;
+      }
+      div[data-testid="stTextInput"]:not(:has(input[aria-label="modal_trigger"])) input:focus {
+        border-color:#2980B9 !important;
+        box-shadow:0 0 0 1px #2980B9 !important;
+      }
       .ux-hint {font-size:12px;color:#657079;line-height:1.35;margin-bottom:8px}
       .ux-summary {background:#fff;border:1px solid #c9ced3;padding:5px 8px;height:46px;}
       .ux-summary-label {font-size:8px;color:#667085;text-transform:uppercase;line-height:1}
@@ -1889,16 +1910,14 @@ def render_busqueda_expedientes():
       .ux-section-note {font-size:11px;color:#667085;margin:1px 0 3px 0}
       .ux-download {margin:4px 0 6px 0}
 
-    input[aria-label="modal_trigger"] {
+    div[data-testid="stTextInput"]:has(input[aria-label="modal_trigger"]) {
         display: none !important;
         visibility: hidden !important;
         height: 0 !important;
         min-height: 0 !important;
+        overflow: hidden !important;
         margin: 0 !important;
         padding: 0 !important;
-    }
-    div[data-testid="stTextInput"]:has(input[aria-label="modal_trigger"]) {
-        display: none !important;
     }
 
 
