@@ -212,8 +212,9 @@ def mostrar_modal_detalle(tipo_clic, param1, param2, param3, df_base):
         df_final["Fecha_Ultima_Accion"] = df_modal.iloc[:, 3]
         df_final["Trazabilidad_Oculta"] = df_modal["Trazabilidad"] if "Trazabilidad" in df_modal.columns else df_modal.iloc[:, 5]
         
-        terminos_privacidad = "COMPRAVENTA|PERMUTA|DESAFECTACI[OÓ]N|SUBASTA"
-        mask_privacidad = df_final["Procedimiento"].astype(str).str.upper().str.contains(terminos_privacidad, regex=True)
+        terminos_privacidad = r"(?<![A-Z0-9])(?:VENTA|COMPRAVENTA|SUBASTA|PERMUTA|RESERVA|DESAFECTACION)(?![A-Z0-9])"
+        procedimiento_privacidad = df_final["Procedimiento"].astype(str).map(normalize_text)
+        mask_privacidad = procedimiento_privacidad.str.contains(terminos_privacidad, regex=True, na=False)
         
         palabras_entidad = "MUNICIPALIDAD|GOBIERNO|MINISTERIO|S\.A\.|S\.A\.C\.|S\.R\.L\.|E\.I\.R\.L\.|ASOCIACION|EMPRESA|COMUNIDAD|CONSORCIO|DIRECCION|SUPERINTENDENCIA|UNIVERSIDAD|COOPERATIVA|SINDICATO|PROYECTO|IGLESIA|COMITE|JUNTA"
         mask_juridica = df_final["Administrado"].astype(str).str.upper().str.contains(palabras_entidad, na=False)
@@ -291,6 +292,13 @@ def mostrar_modal_detalle(tipo_clic, param1, param2, param3, df_base):
           .detalle-table {{ width:max-content; min-width:100%; border-collapse:collapse; font-size:12px; background:#fff; }}
           .detalle-table th {{ position:sticky; top:0; z-index:2; background:#f1f3f5; color:#505a5f; padding:8px 9px; border:1px solid #d9dde1; text-align:left; white-space:nowrap; font-weight:700; }}
           .detalle-table td {{ padding:8px 9px; border:1px solid #e1e4e7; color:#202428; vertical-align:top; white-space:nowrap; }}
+          /* Mismos criterios de ancho para los detalles abiertos desde los resúmenes. */
+          .detalle-table th:nth-child(1),.detalle-table td:nth-child(1) {{ width:110px; min-width:110px; }}
+          .detalle-table th:nth-child(2),.detalle-table td:nth-child(2) {{ width:210px; min-width:210px; }}
+          .detalle-table th:nth-child(3),.detalle-table td:nth-child(3) {{ width:70px; min-width:70px; }}
+          .detalle-table th:nth-child(4),.detalle-table td:nth-child(4) {{ width:300px; min-width:300px; }}
+          .detalle-table th:nth-child(5),.detalle-table td:nth-child(5) {{ width:250px; min-width:250px; }}
+          .detalle-table th:nth-child(6),.detalle-table td:nth-child(6) {{ width:110px; min-width:110px; }}
           .detalle-exp-row {{ cursor:pointer; }}
           .detalle-exp-row:hover td {{ background:#e8f3fb; }}
           .detalle-exp-row:active td {{ background:#d9ebf7; }}
@@ -1759,8 +1767,11 @@ def aplicar_privacidad_venta(df_resultados: pd.DataFrame, cols: Dict[str, Option
 
     proc = out[proc_col].astype(str).map(normalize_text)
     admin = out[admin_col].astype(str).map(normalize_text)
-    # COMPRAVENTA también debe activar la regla.
-    venta = proc.str.contains("VENTA", regex=False, na=False)
+    # Familias de procedimiento sujetas a privacidad. La normalización elimina
+    # tildes, pero la frontera de palabra mantiene DESAFECTACION distinta de
+    # AFECTACION. También reconoce variaciones como VENTAS, RESERVAS, etc.
+    terminos_privacidad = r"(?<![A-Z0-9])(?:VENTA|COMPRAVENTA|SUBASTA|PERMUTA|RESERVA|DESAFECTACION)(?![A-Z0-9])"
+    venta = proc.str.contains(terminos_privacidad, regex=True, na=False)
     juridica = admin.str.contains(LEGAL_ENTITY_RE, regex=True, na=False)
     out.loc[venta & ~juridica, admin_col] = "PERSONA NATURAL"
     return out
@@ -2713,6 +2724,16 @@ def render_busqueda_expedientes():
       .ux-table{{width:100%;border-collapse:collapse;font-size:12px;background:#fff}}
       .ux-table th{{position:sticky;top:0;z-index:2;background:#f1f3f5;color:#505a5f;padding:8px;border:1px solid #d9dde1;text-align:left;white-space:nowrap}}
       .ux-table td{{padding:8px;border:1px solid #e1e4e7;color:#202428;white-space:nowrap}}
+      /* Anchos deliberados: evita que Expediente, Departamento y Estado
+         consuman espacio innecesario y deja más área útil al Administrado. */
+      .ux-table th:nth-child(1),.ux-table td:nth-child(1){{width:110px;min-width:110px}}
+      .ux-table th:nth-child(2),.ux-table td:nth-child(2){{width:250px;min-width:250px}}
+      .ux-table th:nth-child(3),.ux-table td:nth-child(3){{width:300px;min-width:300px}}
+      .ux-table th:nth-child(4),.ux-table td:nth-child(4){{width:110px;min-width:110px}}
+      .ux-table th:nth-child(5),.ux-table td:nth-child(5){{width:110px;min-width:110px}}
+      .ux-table th:nth-child(6),.ux-table td:nth-child(6){{width:110px;min-width:110px}}
+      .ux-table th:nth-child(7),.ux-table td:nth-child(7){{width:80px;min-width:80px}}
+      .ux-table th:nth-child(8),.ux-table td:nth-child(8){{width:120px;min-width:120px}}
       .ux-rrow{{cursor:pointer}}
       .ux-rrow:hover td{{background:#e8f3fb}}
 
@@ -2729,11 +2750,11 @@ def render_busqueda_expedientes():
       .ux-mrow-table:active td{{background:#e8f3fb}}
       .ux-mobile-exp-link{{display:inline-block;color:#146eb4;font-weight:600;text-decoration:underline;text-underline-offset:2px;white-space:nowrap}}
       .ux-mobile-exp-link:active{{opacity:.7}}
-      .ux-mobile-table th:nth-child(1),.ux-mobile-table td:nth-child(1){{width:150px}}
-      .ux-mobile-table th:nth-child(2),.ux-mobile-table td:nth-child(2){{width:270px}}
-      .ux-mobile-table th:nth-child(3),.ux-mobile-table td:nth-child(3){{width:360px}}
-      .ux-mobile-table th:nth-child(4),.ux-mobile-table td:nth-child(4){{width:120px}}
-      .ux-mobile-table th:nth-child(5),.ux-mobile-table td:nth-child(5){{width:120px}}
+      .ux-mobile-table th:nth-child(1),.ux-mobile-table td:nth-child(1){{width:110px}}
+      .ux-mobile-table th:nth-child(2),.ux-mobile-table td:nth-child(2){{width:210px}}
+      .ux-mobile-table th:nth-child(3),.ux-mobile-table td:nth-child(3){{width:280px}}
+      .ux-mobile-table th:nth-child(4),.ux-mobile-table td:nth-child(4){{width:110px}}
+      .ux-mobile-table th:nth-child(5),.ux-mobile-table td:nth-child(5){{width:110px}}
 
       /* Indicador visual sutil de que la tabla se puede deslizar. */
       .ux-mobile-tablewrap::after{{content:"Desliza horizontalmente para ver más";display:block;padding:6px 8px;font-size:10px;color:#667085;background:#fafafa;border-top:1px solid #e1e4e7;text-align:right}}
