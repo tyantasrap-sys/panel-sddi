@@ -289,16 +289,20 @@ def mostrar_modal_detalle(tipo_clic, param1, param2, param3, df_base):
           * {{ box-sizing: border-box; }}
           body {{ margin:0; font-family: Inter, Arial, sans-serif; background: transparent; }}
           .detalle-wrap {{ width:100%; overflow-x:auto; max-height:62vh; background:#fff; border:1px solid #d9dde1; border-radius:6px; }}
-          .detalle-table {{ width:max-content; min-width:100%; border-collapse:collapse; font-size:12px; background:#fff; }}
-          .detalle-table th {{ position:sticky; top:0; z-index:2; background:#f1f3f5; color:#505a5f; padding:8px 9px; border:1px solid #d9dde1; text-align:left; white-space:nowrap; font-weight:700; }}
-          .detalle-table td {{ padding:8px 9px; border:1px solid #e1e4e7; color:#202428; vertical-align:top; white-space:nowrap; }}
-          /* Mismos criterios de ancho para los detalles abiertos desde los resúmenes. */
-          .detalle-table th:nth-child(1),.detalle-table td:nth-child(1) {{ width:110px; min-width:110px; }}
-          .detalle-table th:nth-child(2),.detalle-table td:nth-child(2) {{ width:210px; min-width:210px; }}
-          .detalle-table th:nth-child(3),.detalle-table td:nth-child(3) {{ width:70px; min-width:70px; }}
-          .detalle-table th:nth-child(4),.detalle-table td:nth-child(4) {{ width:300px; min-width:300px; }}
-          .detalle-table th:nth-child(5),.detalle-table td:nth-child(5) {{ width:250px; min-width:250px; }}
-          .detalle-table th:nth-child(6),.detalle-table td:nth-child(6) {{ width:110px; min-width:110px; }}
+          .detalle-table {{ width:895px; min-width:895px; table-layout:fixed; border-collapse:collapse; font-size:12px; background:#fff; }}
+          .detalle-table th {{ position:sticky; top:0; z-index:2; background:#f1f3f5; color:#505a5f; padding:7px 8px; border:1px solid #d9dde1; text-align:left; white-space:nowrap; font-weight:700; overflow:hidden; text-overflow:ellipsis; }}
+          .detalle-table td {{ padding:7px 8px; border:1px solid #e1e4e7; color:#202428; vertical-align:top; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }}
+          /* Propuesta compacta para el reporte: los textos largos se recortan
+             visualmente con ... sin modificar el dato real. */
+          .detalle-table th:nth-child(1),.detalle-table td:nth-child(1) {{ width:95px; min-width:95px; max-width:95px; }}
+          .detalle-table th:nth-child(2),.detalle-table td:nth-child(2) {{ width:90px; min-width:90px; max-width:90px; }}
+          .detalle-table th:nth-child(3),.detalle-table td:nth-child(3) {{ width:50px; min-width:50px; max-width:50px; }}
+          .detalle-table th:nth-child(4),.detalle-table td:nth-child(4) {{ width:280px; min-width:280px; max-width:280px; }}
+          .detalle-table th:nth-child(5),.detalle-table td:nth-child(5) {{ width:180px; min-width:180px; max-width:180px; }}
+          .detalle-table th:nth-child(6),.detalle-table td:nth-child(6) {{ width:85px; min-width:85px; max-width:85px; }}
+          .detalle-table th:nth-child(7),.detalle-table td:nth-child(7) {{ width:115px; min-width:115px; max-width:115px; }}
+          .detalle-table th:nth-child(8),.detalle-table td:nth-child(8) {{ width:105px; min-width:105px; max-width:105px; }}
+          .detalle-table th:nth-child(9),.detalle-table td:nth-child(9) {{ width:105px; min-width:105px; max-width:105px; }}
           .detalle-exp-row {{ cursor:pointer; }}
           .detalle-exp-row:hover td {{ background:#e8f3fb; }}
           .detalle-exp-row:active td {{ background:#d9ebf7; }}
@@ -2721,19 +2725,19 @@ def render_busqueda_expedientes():
     html = f"""
     <style>
       .ux-tablewrap{{overflow-x:auto;max-height:68vh;width:100%}}
-      .ux-table{{width:100%;border-collapse:collapse;font-size:12px;background:#fff}}
-      .ux-table th{{position:sticky;top:0;z-index:2;background:#f1f3f5;color:#505a5f;padding:8px;border:1px solid #d9dde1;text-align:left;white-space:nowrap}}
-      .ux-table td{{padding:8px;border:1px solid #e1e4e7;color:#202428;white-space:nowrap}}
-      /* Anchos deliberados: evita que Expediente, Departamento y Estado
-         consuman espacio innecesario y deja más área útil al Administrado. */
-      .ux-table th:nth-child(1),.ux-table td:nth-child(1){{width:110px;min-width:110px}}
-      .ux-table th:nth-child(2),.ux-table td:nth-child(2){{width:250px;min-width:250px}}
-      .ux-table th:nth-child(3),.ux-table td:nth-child(3){{width:300px;min-width:300px}}
-      .ux-table th:nth-child(4),.ux-table td:nth-child(4){{width:110px;min-width:110px}}
-      .ux-table th:nth-child(5),.ux-table td:nth-child(5){{width:110px;min-width:110px}}
-      .ux-table th:nth-child(6),.ux-table td:nth-child(6){{width:110px;min-width:110px}}
-      .ux-table th:nth-child(7),.ux-table td:nth-child(7){{width:80px;min-width:80px}}
-      .ux-table th:nth-child(8),.ux-table td:nth-child(8){{width:120px;min-width:120px}}
+      .ux-table{{width:865px;min-width:865px;table-layout:fixed;border-collapse:collapse;font-size:12px;background:#fff}}
+      .ux-table th{{position:sticky;top:0;z-index:2;background:#f1f3f5;color:#505a5f;padding:7px 7px;border:1px solid #d9dde1;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
+      .ux-table td{{padding:7px;border:1px solid #e1e4e7;color:#202428;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
+      /* Propuesta compacta: campos cortos muy contenidos y textos largos
+         controlados con ... sin alterar los datos. */
+      .ux-table th:nth-child(1),.ux-table td:nth-child(1){{width:95px;min-width:95px;max-width:95px}}
+      .ux-table th:nth-child(2),.ux-table td:nth-child(2){{width:145px;min-width:145px;max-width:145px}}
+      .ux-table th:nth-child(3),.ux-table td:nth-child(3){{width:250px;min-width:250px;max-width:250px}}
+      .ux-table th:nth-child(4),.ux-table td:nth-child(4){{width:75px;min-width:75px;max-width:75px}}
+      .ux-table th:nth-child(5),.ux-table td:nth-child(5){{width:75px;min-width:75px;max-width:75px}}
+      .ux-table th:nth-child(6),.ux-table td:nth-child(6){{width:90px;min-width:90px;max-width:90px}}
+      .ux-table th:nth-child(7),.ux-table td:nth-child(7){{width:55px;min-width:55px;max-width:55px}}
+      .ux-table th:nth-child(8),.ux-table td:nth-child(8){{width:80px;min-width:80px;max-width:80px}}
       .ux-rrow{{cursor:pointer}}
       .ux-rrow:hover td{{background:#e8f3fb}}
 
@@ -2743,18 +2747,18 @@ def render_busqueda_expedientes():
          palabras y columnas hasta volverlas ilegibles. */
       .ux-mobile-open-note{{font-size:11px;color:#667085;padding:0 0 6px 2px}}
       .ux-mobile-tablewrap{{width:100%;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;background:#fff;border:1px solid #d9dde1;border-radius:5px}}
-      .ux-mobile-table{{width:max-content;min-width:720px;border-collapse:collapse;table-layout:fixed;font-size:11px;background:#fff}}
-      .ux-mobile-table th{{background:#f1f3f5;color:#505a5f;padding:8px 7px;border:1px solid #d9dde1;text-align:left;line-height:1.15;white-space:nowrap;position:sticky;top:0;z-index:1}}
-      .ux-mobile-table td{{padding:8px 7px;border:1px solid #e1e4e7;color:#202428;vertical-align:top;line-height:1.3;white-space:nowrap}}
+      .ux-mobile-table{{width:665px;min-width:665px;border-collapse:collapse;table-layout:fixed;font-size:11px;background:#fff}}
+      .ux-mobile-table th{{background:#f1f3f5;color:#505a5f;padding:7px 6px;border:1px solid #d9dde1;text-align:left;line-height:1.15;white-space:nowrap;position:sticky;top:0;z-index:1;overflow:hidden;text-overflow:ellipsis}}
+      .ux-mobile-table td{{padding:7px 6px;border:1px solid #e1e4e7;color:#202428;vertical-align:top;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
       .ux-mrow-table{{cursor:pointer}}
       .ux-mrow-table:active td{{background:#e8f3fb}}
       .ux-mobile-exp-link{{display:inline-block;color:#146eb4;font-weight:600;text-decoration:underline;text-underline-offset:2px;white-space:nowrap}}
       .ux-mobile-exp-link:active{{opacity:.7}}
-      .ux-mobile-table th:nth-child(1),.ux-mobile-table td:nth-child(1){{width:110px}}
-      .ux-mobile-table th:nth-child(2),.ux-mobile-table td:nth-child(2){{width:210px}}
-      .ux-mobile-table th:nth-child(3),.ux-mobile-table td:nth-child(3){{width:280px}}
-      .ux-mobile-table th:nth-child(4),.ux-mobile-table td:nth-child(4){{width:110px}}
-      .ux-mobile-table th:nth-child(5),.ux-mobile-table td:nth-child(5){{width:110px}}
+      .ux-mobile-table th:nth-child(1),.ux-mobile-table td:nth-child(1){{width:95px;min-width:95px;max-width:95px}}
+      .ux-mobile-table th:nth-child(2),.ux-mobile-table td:nth-child(2){{width:145px;min-width:145px;max-width:145px}}
+      .ux-mobile-table th:nth-child(3),.ux-mobile-table td:nth-child(3){{width:250px;min-width:250px;max-width:250px}}
+      .ux-mobile-table th:nth-child(4),.ux-mobile-table td:nth-child(4){{width:75px;min-width:75px;max-width:75px}}
+      .ux-mobile-table th:nth-child(5),.ux-mobile-table td:nth-child(5){{width:80px;min-width:80px;max-width:80px}}
 
       /* Indicador visual sutil de que la tabla se puede deslizar. */
       .ux-mobile-tablewrap::after{{content:"Desliza horizontalmente para ver más";display:block;padding:6px 8px;font-size:10px;color:#667085;background:#fafafa;border-top:1px solid #e1e4e7;text-align:right}}
